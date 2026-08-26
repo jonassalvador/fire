@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIRE — Frihetskalkylatorn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead__issue">No. 01 — Utgåva om ekonomiskt oberoende</div>
+  <h1 class="masthead__title">FIRE<span class="masthead__dot">.</span></h1>
+  <p class="masthead__standfirst">En liten kalkylator för en stor fråga: när är du fri? Ställ in dina antaganden och se svaret ändras direkt.</p>
+</header>
+
+<nav class="modes" role="tablist" aria-label="Välj beräkning">
+  <button class="modes__tab is-active" data-mode="need" role="tab" aria-selected="true">
+    <span class="modes__num">01</span>
+    <span class="modes__label">Hur mycket behöver jag?</span>
+  </button>
+  <button class="modes__tab" data-mode="status" role="tab" aria-selected="false">
+    <span class="modes__num">02</span>
+    <span class="modes__label">Är jag redo nu?</span>
+  </button>
+  <button class="modes__tab" data-mode="withdraw" role="tab" aria-selected="false">
+    <span class="modes__num">03</span>
+    <span class="modes__label">Hur mycket kan jag ta ut?</span>
+  </button>
+</nav>
+
+<main class="layout">
+
+  <section class="panel panel--inputs">
+
+    <div class="field-group">
+      <h2 class="field-group__title">Om dig</h2>
+
+      <label class="field">
+        <span class="field__label">Din ålder</span>
+        <span class="field__value"><output id="out-age">35</output> år</span>
+        <input type="range" id="age" min="18" max="75" value="35" step="1">
+      </label>
+
+      <label class="field" data-modes="need">
+        <span class="field__label">Vid vilken ålder vill du gå FIRE</span>
+        <span class="field__value"><output id="out-targetAge">50</output> år</span>
+        <input type="range" id="targetAge" min="18" max="80" value="50" step="1">
+      </label>
+
+      <label class="field field--select">
+        <span class="field__label">Var i världen bor du</span>
+        <select id="currency">
+          <option value="SEK" data-symbol="kr" data-locale="sv-SE" selected>Sverige — kr</option>
+          <option value="EUR" data-symbol="€" data-locale="de-DE">Eurozonen — €</option>
+          <option value="USD" data-symbol="$" data-locale="en-US">USA — $</option>
+          <option value="GBP" data-symbol="£" data-locale="en-GB">Storbritannien — £</option>
+          <option value="NOK" data-symbol="kr" data-locale="nb-NO">Norge — kr</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="field-group" data-modes="need status">
+      <h2 class="field-group__title">Din livsstil</h2>
+      <label class="field">
+        <span class="field__label">Önskad månadskonsumtion, i dagens pengar</span>
+        <span class="field__value"><output id="out-spend">25 000</output> <span class="unit"></span></span>
+        <input type="range" id="spend" min="5000" max="150000" value="25000" step="500">
+      </label>
+    </div>
+
+    <div class="field-group" data-modes="status withdraw">
+      <h2 class="field-group__title">Ditt läge idag</h2>
+      <label class="field">
+        <span class="field__label">Nuvarande sparkapital</span>
+        <span class="field__value"><output id="out-balance">5 000 000</output> <span class="unit"></span></span>
+        <input type="range" id="balance" min="0" max="30000000" value="5000000" step="50000">
+      </label>
+    </div>
+
+    <div class="field-group">
+      <h2 class="field-group__title">Antaganden</h2>
+      <label class="field">
+        <span class="field__label">Förväntad årlig avkastning</span>
+        <span class="field__value"><output id="out-return">6</output> %</span>
+        <input type="range" id="return" min="0" max="12" value="6" step="0.1">
+      </label>
+      <label class="field">
+        <span class="field__label">Räkna till ålder</span>
+        <span class="field__value"><output id="out-lifespan">95</output> år</span>
+        <input type="range" id="lifespan" min="80" max="105" value="95" step="1">
+      </label>
+    </div>
+
+    <div class="field-group">
+      <h2 class="field-group__title">Justeringar</h2>
+
+      <div class="toggle-row">
+        <label class="switch">
+          <input type="checkbox" id="toggle-inflation">
+          <span class="switch__track"></span>
+          <span class="switch__label">Räkna med inflation</span>
+        </label>
+        <div class="toggle-row__sub" id="sub-inflation" hidden>
+          <label class="field field--compact">
+            <span class="field__label">Förväntad inflation</span>
+            <span class="field__value"><output id="out-inflation">2</output> %</span>
+            <input type="range" id="inflation" min="0" max="8" value="2" step="0.1">
+          </label>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <label class="switch">
+          <input type="checkbox" id="toggle-tax">
+          <span class="switch__track"></span>
+          <span class="switch__label">Räkna med skatt på uttag</span>
+        </label>
+        <div class="toggle-row__sub" id="sub-tax" hidden>
+          <label class="field field--compact">
+            <span class="field__label">Skattesats vid uttag</span>
+            <span class="field__value"><output id="out-tax">30</output> %</span>
+            <input type="range" id="tax" min="0" max="60" value="30" step="1">
+          </label>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <label class="switch">
+          <input type="checkbox" id="toggle-pensions">
+          <span class="switch__track"></span>
+          <span class="switch__label">Räkna med kommande pensioner</span>
+        </label>
+        <div class="toggle-row__sub toggle-row__sub--pensions" id="sub-pensions" hidden>
+
+          <div class="pension-card">
+            <label class="switch switch--small">
+              <input type="checkbox" id="toggle-pension1" checked>
+              <span class="switch__track"></span>
+              <span class="switch__label">Allmän pension</span>
+            </label>
+            <label class="field field--compact">
+              <span class="field__label">Belopp per månad, efter skatt</span>
+              <span class="field__value"><output id="out-pension1amount">12 000</output> <span class="unit"></span></span>
+              <input type="range" id="pension1amount" min="0" max="40000" value="12000" step="500">
+            </label>
+            <label class="field field--compact">
+              <span class="field__label">Från vilken ålder</span>
+              <span class="field__value"><output id="out-pension1age">65</output> år</span>
+              <input type="range" id="pension1age" min="60" max="75" value="65" step="1">
+            </label>
+          </div>
+
+          <div class="pension-card">
+            <label class="switch switch--small">
+              <input type="checkbox" id="toggle-pension2" checked>
+              <span class="switch__track"></span>
+              <span class="switch__label">Tjänstepension</span>
+            </label>
+            <label class="field field--compact">
+              <span class="field__label">Belopp per månad, efter skatt</span>
+              <span class="field__value"><output id="out-pension2amount">6 000</output> <span class="unit"></span></span>
+              <input type="range" id="pension2amount" min="0" max="40000" value="6000" step="500">
+            </label>
+            <label class="field field--compact">
+              <span class="field__label">Från vilken ålder</span>
+              <span class="field__value"><output id="out-pension2age">62</output> år</span>
+              <input type="range" id="pension2age" min="55" max="75" value="62" step="1">
+            </label>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+  </section>
+
+  <section class="panel panel--result">
+    <div class="result">
+      <p class="result__eyebrow" id="result-eyebrow">Du behöver</p>
+      <p class="result__figure" id="result-figure">8 200 000 kr</p>
+      <p class="result__caption" id="result-caption">för att kunna gå FIRE vid 50 års ålder, med din valda livsstil.</p>
+    </div>
+
+    <div class="chart-wrap">
+      <svg id="chart" viewBox="0 0 640 280" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="chart-axis" id="chart-axis"></div>
+    </div>
+
+    <dl class="stats-row" id="stats-row">
+      <div class="stats-row__item">
+        <dt>Räcker till ålder</dt>
+        <dd id="stat-lasts">95+</dd>
+      </div>
+      <div class="stats-row__item">
+        <dt>Uttag / månad idag</dt>
+        <dd id="stat-withdrawal">—</dd>
+      </div>
+      <div class="stats-row__item">
+        <dt>Total pension / månad</dt>
+        <dd id="stat-pension">—</dd>
+      </div>
+    </dl>
+  </section>
+
+</main>
+
+<footer class="colophon">
+  <p>Byggd i all hast, på skoj. Alla siffror är förenklade uppskattningar — inte finansiell rådgivning.</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
