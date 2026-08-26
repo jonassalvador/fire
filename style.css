@@ -219,6 +219,49 @@ body {
   margin-top: 6px;
 }
 
+/* ---------- Strategy toggle ---------- */
+
+.strategy-toggle {
+  display: flex;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.strategy-toggle__option {
+  flex: 1;
+  text-align: center;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--ink-soft);
+  background: var(--paper-raised);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.strategy-toggle__option:first-child {
+  border-right: 1px solid var(--rule);
+}
+
+.strategy-toggle__option input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.strategy-toggle__option:has(input:checked) {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.field-hint {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 12px 0 0;
+}
+
 /* ---------- Toggles ---------- */
 
 .toggle-row { margin-bottom: 24px; }
@@ -270,6 +313,14 @@ body {
 }
 
 .switch--small .switch__label { font-size: 13px; color: var(--ink-soft); }
+
+.toggle-hint {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: 6px 0 0;
+  padding-left: 50px;
+  line-height: 1.4;
+}
 
 .toggle-row__sub {
   margin-top: 16px;
@@ -331,6 +382,7 @@ body {
 
 .chart-wrap {
   margin-top: 36px;
+  position: relative;
 }
 
 #chart {
@@ -338,6 +390,20 @@ body {
   height: 220px;
   display: block;
   overflow: visible;
+  cursor: crosshair;
+}
+
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 2px;
+  z-index: 2;
 }
 
 .chart-axis {

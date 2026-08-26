@@ -38,13 +38,23 @@ function wireToggle(toggleId, subId) {
 
 wireToggle('toggle-inflation', 'sub-inflation');
 wireToggle('toggle-tax', 'sub-tax');
+wireToggle('toggle-capitaltax', 'sub-capitaltax');
 wireToggle('toggle-pensions', 'sub-pensions');
+
+document.querySelectorAll('input[name="strategy"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.getElementById('strategy-hint').textContent =
+      radio.value === 'preserve'
+        ? 'Du ska aldrig äta av det kapital du började med — bara leva på avkastningen.'
+        : 'Kapitalet ska ta slut precis vid den ålder du räknar till.';
+    recalculate();
+  });
+});
 
 // ---------- Formatting ----------
 
 function currencyMeta() {
-  const opt = els.currency.selectedOptions[0];
-  return { symbol: opt.dataset.symbol, locale: opt.dataset.locale };
+  return { symbol: 'kr', locale: 'sv-SE' };
 }
 
 function fmtNumber(n) {
@@ -67,6 +77,7 @@ function syncDisplays() {
   els['out-lifespan'].textContent = els.lifespan.value;
   els['out-inflation'].textContent = els.inflation.value;
   els['out-tax'].textContent = els.tax.value;
+  els['out-capitaltax'].textContent = els.capitaltax.value;
   els['out-pension1amount'].textContent = fmtNumber(+els.pension1amount.value);
   els['out-pension1age'].textContent = els.pension1age.value;
   els['out-pension2amount'].textContent = fmtNumber(+els.pension2amount.value);
@@ -79,13 +90,21 @@ function syncDisplays() {
 function getParams() {
   const inflationOn = els['toggle-inflation'].checked;
   const taxOn = els['toggle-tax'].checked;
+  const capitalTaxOn = els['toggle-capitaltax'].checked;
   const pensionsOn = els['toggle-pensions'].checked;
 
   const nominalReturn = +els.return.value / 100;
   const inflation = inflationOn ? +els.inflation.value / 100 : 0;
   // "include inflation" = discount your return by inflation, i.e. think in real terms.
   // switched off = optimistic simplification, spend and returns treated as already-real.
-  const growthRate = inflationOn ? ((1 + nominalReturn) / (1 + inflation) - 1) : nominalReturn;
+  let growthRate = inflationOn ? ((1 + nominalReturn) / (1 + inflation) - 1) : nominalReturn;
+
+  // capital tax (e.g. Swedish ISK schablonskatt) taxes the account value each year,
+  // independent of withdrawals — modeled as a flat annual haircut on the balance.
+  if (capitalTaxOn) {
+    const capitalTaxRate = +els.capitaltax.value / 100;
+    growthRate = (1 + growthRate) * (1 - capitalTaxRate) - 1;
+  }
 
   const taxRate = taxOn ? +els.tax.value / 100 : 0;
 
@@ -99,11 +118,14 @@ function getParams() {
     }
   }
 
+  const preserveCapital = document.querySelector('input[name="strategy"]:checked').value === 'preserve';
+
   return {
     growthRate,
     taxRate,
     pensions,
     lifespan: +els.lifespan.value,
+    preserveCapital,
   };
 }
 
@@ -138,7 +160,12 @@ function simulate(startBalance, startAge, monthlySpend, params) {
 }
 
 function succeeds(startBalance, startAge, monthlySpend, params) {
-  return simulate(startBalance, startAge, monthlySpend, params).failedAtAge === null;
+  const result = simulate(startBalance, startAge, monthlySpend, params);
+  if (result.failedAtAge !== null) return false;
+  if (!params.preserveCapital) return true;
+  // "bevara kapitalet": the real value of the capital must be intact (or grown) by the end.
+  const finalBalance = result.path[result.path.length - 1].balance;
+  return finalBalance >= startBalance;
 }
 
 // Binary search for the minimum starting balance that survives to lifespan.
@@ -165,18 +192,59 @@ function solveMaxSpend(startBalance, startAge, params) {
 
 const svg = document.getElementById('chart');
 const NS = 'http://www.w3.org/2000/svg';
+const tooltip = document.getElementById('chart-tooltip');
+
+const W = 640, H = 280;
+const PAD_LEFT = 64, PAD_RIGHT = 8, PAD_TOP = 10, PAD_BOTTOM = 8;
+
+// current chart's scale + data, kept around so the hover handler can reuse it
+let chartScale = null;
+
+function niceMoneyLabel(n) {
+  const { symbol, locale } = currencyMeta();
+  if (n >= 1000000) {
+    return `${(n / 1000000).toLocaleString(locale, { maximumFractionDigits: 1 })} M${symbol}`;
+  }
+  return fmtMoney(n);
+}
 
 function drawChart(path, failedAtAge) {
   svg.innerHTML = '';
-  const W = 640, H = 280, PAD = 8;
   const maxBalance = Math.max(...path.map(p => p.balance), 1);
   const minAge = path[0].age, maxAge = path[path.length - 1].age;
 
-  const x = age => PAD + (age - minAge) / (maxAge - minAge || 1) * (W - PAD * 2);
-  const y = balance => H - PAD - (balance / maxBalance) * (H - PAD * 2);
+  const x = age => PAD_LEFT + (age - minAge) / (maxAge - minAge || 1) * (W - PAD_LEFT - PAD_RIGHT);
+  const y = balance => H - PAD_BOTTOM - (balance / maxBalance) * (H - PAD_TOP - PAD_BOTTOM);
+
+  chartScale = { path, x, y, minAge, maxAge, maxBalance };
+
+  // y-axis gridlines + value labels
+  const tickCount = 4;
+  for (let i = 0; i <= tickCount; i++) {
+    const value = (maxBalance / tickCount) * i;
+    const yPos = y(value);
+
+    const grid = document.createElementNS(NS, 'line');
+    grid.setAttribute('x1', PAD_LEFT); grid.setAttribute('x2', W - PAD_RIGHT);
+    grid.setAttribute('y1', yPos); grid.setAttribute('y2', yPos);
+    grid.setAttribute('stroke', 'var(--rule)');
+    grid.setAttribute('stroke-width', '1');
+    svg.appendChild(grid);
+
+    const label = document.createElementNS(NS, 'text');
+    label.setAttribute('x', PAD_LEFT - 10);
+    label.setAttribute('y', yPos);
+    label.setAttribute('text-anchor', 'end');
+    label.setAttribute('dominant-baseline', 'middle');
+    label.setAttribute('font-family', 'var(--mono)');
+    label.setAttribute('font-size', '10');
+    label.setAttribute('fill', 'var(--ink-soft)');
+    label.textContent = niceMoneyLabel(value);
+    svg.appendChild(label);
+  }
 
   const linePoints = path.map(p => `${x(p.age)},${y(p.balance)}`).join(' ');
-  const areaPoints = `${x(minAge)},${H} ${linePoints} ${x(maxAge)},${H}`;
+  const areaPoints = `${x(minAge)},${y(0)} ${linePoints} ${x(maxAge)},${y(0)}`;
 
   const area = document.createElementNS(NS, 'polygon');
   area.setAttribute('points', areaPoints);
@@ -189,13 +257,6 @@ function drawChart(path, failedAtAge) {
   line.setAttribute('stroke', 'var(--ink)');
   line.setAttribute('stroke-width', '2');
   svg.appendChild(line);
-
-  const zero = document.createElementNS(NS, 'line');
-  zero.setAttribute('x1', PAD); zero.setAttribute('x2', W - PAD);
-  zero.setAttribute('y1', H - PAD); zero.setAttribute('y2', H - PAD);
-  zero.setAttribute('stroke', 'var(--rule)');
-  zero.setAttribute('stroke-width', '1');
-  svg.appendChild(zero);
 
   if (failedAtAge !== null) {
     const dot = document.createElementNS(NS, 'circle');
@@ -216,8 +277,60 @@ function drawChart(path, failedAtAge) {
     svg.appendChild(label);
   }
 
+  // hover marker, drawn last so it sits on top
+  const hoverDot = document.createElementNS(NS, 'circle');
+  hoverDot.setAttribute('id', 'chart-hover-dot');
+  hoverDot.setAttribute('r', '4');
+  hoverDot.setAttribute('fill', 'var(--ink)');
+  hoverDot.setAttribute('visibility', 'hidden');
+  svg.appendChild(hoverDot);
+
+  // transparent overlay to catch mouse movement across the whole plot area
+  const overlay = document.createElementNS(NS, 'rect');
+  overlay.setAttribute('x', 0); overlay.setAttribute('y', 0);
+  overlay.setAttribute('width', W); overlay.setAttribute('height', H);
+  overlay.setAttribute('fill', 'transparent');
+  overlay.addEventListener('mousemove', handleChartHover);
+  overlay.addEventListener('mouseleave', hideChartHover);
+  svg.appendChild(overlay);
+
   document.getElementById('chart-axis').innerHTML =
     `<span>${minAge} år</span><span>${maxAge} år</span>`;
+}
+
+function handleChartHover(evt) {
+  if (!chartScale) return;
+  const { path, x, y, minAge, maxAge } = chartScale;
+  const rect = svg.getBoundingClientRect();
+  const svgX = (evt.clientX - rect.left) / rect.width * W;
+
+  const age = Math.round(minAge + (svgX - PAD_LEFT) / (W - PAD_LEFT - PAD_RIGHT) * (maxAge - minAge));
+  const clampedAge = Math.min(maxAge, Math.max(minAge, age));
+  const point = path.find(p => p.age === clampedAge) || path[path.length - 1];
+
+  const hoverDot = document.getElementById('chart-hover-dot');
+  hoverDot.setAttribute('cx', x(point.age));
+  hoverDot.setAttribute('cy', y(point.balance));
+  hoverDot.setAttribute('visibility', 'visible');
+
+  tooltip.hidden = false;
+  tooltip.textContent = `${point.age} år — ${fmtMoney(point.balance)}`;
+
+  const wrapRect = svg.parentElement.getBoundingClientRect();
+  const dotClientX = rect.left + (x(point.age) / W) * rect.width;
+  const dotClientY = rect.top + (y(point.balance) / H) * rect.height;
+  let left = dotClientX - wrapRect.left + 14;
+  const top = dotClientY - wrapRect.top - 14;
+  const maxLeft = wrapRect.width - tooltip.offsetWidth - 4;
+  if (left > maxLeft) left = dotClientX - wrapRect.left - tooltip.offsetWidth - 14;
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function hideChartHover() {
+  const hoverDot = document.getElementById('chart-hover-dot');
+  if (hoverDot) hoverDot.setAttribute('visibility', 'hidden');
+  tooltip.hidden = true;
 }
 
 // ---------- Main recalculation ----------
@@ -247,21 +360,34 @@ function recalculate() {
     const balance = +els.balance.value;
     const spend = +els.spend.value;
     const result = simulate(balance, age, spend, params);
-    const ready = result.failedAtAge === null;
-    chartResult = result;
+    const finalBalance = result.path[result.path.length - 1].balance;
+    const ranOut = result.failedAtAge !== null;
+    const preservedOk = !params.preserveCapital || finalBalance >= balance;
+    const ready = !ranOut && preservedOk;
 
     if (ready) {
+      chartResult = result;
       eyebrow = 'Du är redo';
       headline = 'Ja.';
       caption = `Ditt kapital räcker hela vägen till ${params.lifespan} år med en konsumtion på ${fmtMoney(spend)}/månad.`;
+      statLasts = `${params.lifespan}+`;
     } else {
+      // not ready: chart the required scenario instead of the shortfall, so the
+      // graph visibly reflects the chosen withdrawal strategy, same as "need" mode.
       const required = solveRequiredBalance(spend, age, params);
-      eyebrow = 'Inte riktigt än';
-      headline = fmtMoney(required - balance);
-      caption = `så mycket mer behöver du. Med dagens kapital tar pengarna slut vid ${result.failedAtAge} års ålder.`;
+      chartResult = simulate(required, age, spend, params);
+      statLasts = `${params.lifespan}+`;
+      if (ranOut) {
+        eyebrow = 'Inte riktigt än';
+        headline = fmtMoney(required - balance);
+        caption = `så mycket mer behöver du. Med dagens kapital tar pengarna slut vid ${result.failedAtAge} års ålder.`;
+      } else {
+        eyebrow = 'Nästan — men du äter av kapitalet';
+        headline = fmtMoney(required - balance);
+        caption = `så mycket mer behöver du för att aldrig äta av grundplåten. Med dagens kapital räcker pengarna till ${params.lifespan} år, men då har du bara ${fmtMoney(finalBalance)} kvar av de ${fmtMoney(balance)} du började med.`;
+      }
     }
     statWithdrawal = fmtMoney(spend);
-    statLasts = ready ? `${params.lifespan}+` : `${result.failedAtAge}`;
 
   } else {
     const balance = +els.balance.value;
