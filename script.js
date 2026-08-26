@@ -78,6 +78,7 @@ function syncDisplays() {
   els['out-inflation'].textContent = els.inflation.value;
   els['out-tax'].textContent = els.tax.value;
   els['out-capitaltax'].textContent = els.capitaltax.value;
+  els['out-pensiontax'].textContent = els.pensiontax.value;
   els['out-pension1amount'].textContent = fmtNumber(+els.pension1amount.value);
   els['out-pension1age'].textContent = els.pension1age.value;
   els['out-pension2amount'].textContent = fmtNumber(+els.pension2amount.value);
@@ -108,6 +109,7 @@ function getParams() {
 
   const taxRate = taxOn ? +els.tax.value / 100 : 0;
 
+  const pensionTaxRate = pensionsOn ? +els.pensiontax.value / 100 : 0;
   const pensions = [];
   if (pensionsOn) {
     if (els['toggle-pension1'].checked) {
@@ -123,6 +125,7 @@ function getParams() {
   return {
     growthRate,
     taxRate,
+    pensionTaxRate,
     pensions,
     lifespan: +els.lifespan.value,
     preserveCapital,
@@ -136,14 +139,17 @@ function pensionIncomeAt(age, pensions) {
 // Simulates yearly balance from startAge to lifespan given a monthly net spend target.
 // Returns { path: [{age, balance}], failedAtAge: number|null }
 function simulate(startBalance, startAge, monthlySpend, params) {
-  const { growthRate, taxRate, pensions, lifespan } = params;
+  const { growthRate, taxRate, pensionTaxRate, pensions, lifespan } = params;
   let balance = startBalance;
   const path = [{ age: startAge, balance }];
   let failedAtAge = null;
 
   for (let age = startAge; age < lifespan; age++) {
-    const pensionIncome = pensionIncomeAt(age, pensions);
-    const netGap = Math.max(0, monthlySpend - pensionIncome);
+    // pension amounts are entered gross; pension is taxed as income, separately
+    // from — and at a different rate than — tax on withdrawals from the portfolio.
+    const pensionGross = pensionIncomeAt(age, pensions);
+    const pensionNet = pensionGross * (1 - pensionTaxRate);
+    const netGap = Math.max(0, monthlySpend - pensionNet);
     const grossMonthly = taxRate > 0 ? netGap / (1 - taxRate) : netGap;
     const annualWithdrawal = grossMonthly * 12;
 

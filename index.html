@@ -139,7 +139,7 @@
           <span class="switch__track"></span>
           <span class="switch__label">Räkna med skatt på uttag</span>
         </label>
-        <p class="toggle-hint">För vanlig aktiedepå eller pension: skatt bara på det du faktiskt tar ut.</p>
+        <p class="toggle-hint">För vanlig aktiedepå: skatt bara på det du faktiskt tar ut.</p>
         <div class="toggle-row__sub" id="sub-tax" hidden>
           <label class="field field--compact">
             <span class="field__label">Skattesats vid uttag</span>
@@ -164,7 +164,7 @@
               <span class="switch__label">Allmän pension</span>
             </label>
             <label class="field field--compact">
-              <span class="field__label">Belopp per månad, efter skatt</span>
+              <span class="field__label">Belopp per månad, före skatt</span>
               <span class="field__value"><output id="out-pension1amount">12 000</output> <span class="unit"></span></span>
               <input type="range" id="pension1amount" min="0" max="40000" value="12000" step="1000">
             </label>
@@ -182,7 +182,7 @@
               <span class="switch__label">Tjänstepension</span>
             </label>
             <label class="field field--compact">
-              <span class="field__label">Belopp per månad, efter skatt</span>
+              <span class="field__label">Belopp per månad, före skatt</span>
               <span class="field__value"><output id="out-pension2amount">6 000</output> <span class="unit"></span></span>
               <input type="range" id="pension2amount" min="0" max="40000" value="6000" step="1000">
             </label>
@@ -192,6 +192,13 @@
               <input type="range" id="pension2age" min="55" max="75" value="69" step="1">
             </label>
           </div>
+
+          <label class="field field--compact">
+            <span class="field__label">Skattesats på pension</span>
+            <span class="field__value"><output id="out-pensiontax">30</output> %</span>
+            <input type="range" id="pensiontax" min="0" max="60" value="30" step="1">
+          </label>
+          <p class="field-hint">Pension beskattas som vanlig inkomst — inte samma sats som skatt på uttag.</p>
 
         </div>
       </div>
