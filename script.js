@@ -23,6 +23,7 @@ function updateVisibility() {
     const modes = el.dataset.modes.split(' ');
     el.classList.toggle('mode-hidden', !modes.includes(currentMode));
   });
+  updateReturnVisibility();
 }
 
 // ---------- Toggle sub-panels ----------
@@ -40,6 +41,28 @@ wireToggle('toggle-inflation', 'sub-inflation');
 wireToggle('toggle-tax', 'sub-tax');
 wireToggle('toggle-capitaltax', 'sub-capitaltax');
 wireToggle('toggle-pensions', 'sub-pensions');
+
+const bucketToggle = document.getElementById('toggle-buckets');
+const singleReturnBlock = document.getElementById('single-return');
+const bucketsBlock = document.getElementById('sub-buckets');
+
+// bucket allocation only makes sense during decumulation ("Är jag redo?" / "Hur mycket
+// kan jag ta ut?") — a more conservative, already-retired mix. Accumulation ("Hur mycket
+// behöver jag?" / "När når jag FIRE?") always assumes one simple, likely stock-heavy rate.
+function isDecumulationMode() {
+  return currentMode === 'status' || currentMode === 'withdraw';
+}
+
+function updateReturnVisibility() {
+  const showBuckets = isDecumulationMode() && bucketToggle.checked;
+  singleReturnBlock.hidden = showBuckets;
+  bucketsBlock.hidden = !showBuckets;
+}
+
+bucketToggle.addEventListener('change', () => {
+  updateReturnVisibility();
+  recalculate();
+});
 
 document.querySelectorAll('input[name="strategy"]').forEach(radio => {
   radio.addEventListener('change', () => {
@@ -66,6 +89,37 @@ function fmtMoney(n) {
   return `${fmtNumber(n)} ${currencyMeta().symbol}`;
 }
 
+// ---------- Capital allocation (three buckets) ----------
+
+let currentAllocation = { stocks: 0.7, bonds: 0.2, savings: 0.1 };
+
+function updateAllocationDisplay() {
+  const stocksEl = els['alloc-stocks'];
+  const bondsEl = els['alloc-bonds'];
+  let stocks = +stocksEl.value;
+  let bonds = +bondsEl.value;
+  if (stocks + bonds > 100) {
+    bonds = 100 - stocks;
+    bondsEl.value = bonds;
+  }
+  const savings = 100 - stocks - bonds;
+
+  els['out-alloc-stocks'].textContent = stocks;
+  els['out-alloc-bonds'].textContent = bonds;
+  els['out-alloc-savings'].textContent = savings;
+  els['out-return-stocks'].textContent = els['return-stocks'].value;
+  els['out-return-bonds'].textContent = els['return-bonds'].value;
+  els['out-return-savings'].textContent = els['return-savings'].value;
+
+  currentAllocation = { stocks: stocks / 100, bonds: bonds / 100, savings: savings / 100 };
+
+  const blended = currentAllocation.stocks * (+els['return-stocks'].value / 100)
+    + currentAllocation.bonds * (+els['return-bonds'].value / 100)
+    + currentAllocation.savings * (+els['return-savings'].value / 100);
+  document.getElementById('blended-return-hint').textContent =
+    `Blandad avkastning: ${(blended * 100).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} %`;
+}
+
 // keep all range outputs and unit labels in sync
 function syncDisplays() {
   const money = currencyMeta().symbol;
@@ -73,17 +127,20 @@ function syncDisplays() {
   els['out-targetAge'].textContent = els.targetAge.value;
   els['out-spend'].textContent = fmtNumber(+els.spend.value);
   els['out-balance'].textContent = fmtNumber(+els.balance.value);
+  els['out-savings'].textContent = fmtNumber(+els.savings.value);
   els['out-return'].textContent = els.return.value;
   els['out-lifespan'].textContent = els.lifespan.value;
   els['out-inflation'].textContent = els.inflation.value;
   els['out-tax'].textContent = els.tax.value;
   els['out-capitaltax'].textContent = els.capitaltax.value;
-  els['out-pensiontax'].textContent = els.pensiontax.value;
   els['out-pension1amount'].textContent = fmtNumber(+els.pension1amount.value);
   els['out-pension1age'].textContent = els.pension1age.value;
+  els['out-pension1tax'].textContent = els.pension1tax.value;
   els['out-pension2amount'].textContent = fmtNumber(+els.pension2amount.value);
   els['out-pension2age'].textContent = els.pension2age.value;
+  els['out-pension2tax'].textContent = els.pension2tax.value;
   document.querySelectorAll('.field .unit').forEach(u => u.textContent = money);
+  updateAllocationDisplay();
 }
 
 // ---------- Simulation engine ----------
@@ -93,8 +150,16 @@ function getParams() {
   const taxOn = els['toggle-tax'].checked;
   const capitalTaxOn = els['toggle-capitaltax'].checked;
   const pensionsOn = els['toggle-pensions'].checked;
+  const useBuckets = isDecumulationMode() && els['toggle-buckets'].checked;
 
-  const nominalReturn = +els.return.value / 100;
+  // blended return across the three allocation buckets (stocks/bonds/savings) —
+  // withdrawal order doesn't matter here since there's no volatility in this model,
+  // only the weighted-average return of however the capital is split.
+  const nominalReturn = useBuckets
+    ? currentAllocation.stocks * (+els['return-stocks'].value / 100)
+      + currentAllocation.bonds * (+els['return-bonds'].value / 100)
+      + currentAllocation.savings * (+els['return-savings'].value / 100)
+    : +els.return.value / 100;
   const inflation = inflationOn ? +els.inflation.value / 100 : 0;
   // "include inflation" = discount your return by inflation, i.e. think in real terms.
   // switched off = optimistic simplification, spend and returns treated as already-real.
@@ -109,14 +174,13 @@ function getParams() {
 
   const taxRate = taxOn ? +els.tax.value / 100 : 0;
 
-  const pensionTaxRate = pensionsOn ? +els.pensiontax.value / 100 : 0;
   const pensions = [];
   if (pensionsOn) {
     if (els['toggle-pension1'].checked) {
-      pensions.push({ amount: +els.pension1amount.value, startAge: +els.pension1age.value });
+      pensions.push({ amount: +els.pension1amount.value, startAge: +els.pension1age.value, taxRate: +els.pension1tax.value / 100 });
     }
     if (els['toggle-pension2'].checked) {
-      pensions.push({ amount: +els.pension2amount.value, startAge: +els.pension2age.value });
+      pensions.push({ amount: +els.pension2amount.value, startAge: +els.pension2age.value, taxRate: +els.pension2tax.value / 100 });
     }
   }
 
@@ -125,7 +189,6 @@ function getParams() {
   return {
     growthRate,
     taxRate,
-    pensionTaxRate,
     pensions,
     lifespan: +els.lifespan.value,
     preserveCapital,
@@ -136,19 +199,22 @@ function pensionIncomeAt(age, pensions) {
   return pensions.reduce((sum, p) => sum + (age >= p.startAge ? p.amount : 0), 0);
 }
 
+// each pension is taxed as ordinary income at its own rate — separate from,
+// and usually different than, the tax on withdrawals from the portfolio.
+function pensionNetIncomeAt(age, pensions) {
+  return pensions.reduce((sum, p) => sum + (age >= p.startAge ? p.amount * (1 - p.taxRate) : 0), 0);
+}
+
 // Simulates yearly balance from startAge to lifespan given a monthly net spend target.
 // Returns { path: [{age, balance}], failedAtAge: number|null }
 function simulate(startBalance, startAge, monthlySpend, params) {
-  const { growthRate, taxRate, pensionTaxRate, pensions, lifespan } = params;
+  const { growthRate, taxRate, pensions, lifespan } = params;
   let balance = startBalance;
   const path = [{ age: startAge, balance }];
   let failedAtAge = null;
 
   for (let age = startAge; age < lifespan; age++) {
-    // pension amounts are entered gross; pension is taxed as income, separately
-    // from — and at a different rate than — tax on withdrawals from the portfolio.
-    const pensionGross = pensionIncomeAt(age, pensions);
-    const pensionNet = pensionGross * (1 - pensionTaxRate);
+    const pensionNet = pensionNetIncomeAt(age, pensions);
     const netGap = Math.max(0, monthlySpend - pensionNet);
     const grossMonthly = taxRate > 0 ? netGap / (1 - taxRate) : netGap;
     const annualWithdrawal = grossMonthly * 12;
@@ -192,6 +258,40 @@ function solveMaxSpend(startBalance, startAge, params) {
     if (succeeds(startBalance, startAge, mid, params)) lo = mid; else hi = mid;
   }
   return lo;
+}
+
+// Looks up the balance at a given age along a path, clamped to the path's own range.
+function capitalAtAge(path, age) {
+  const minAge = path[0].age, maxAge = path[path.length - 1].age;
+  const clamped = Math.min(maxAge, Math.max(minAge, age));
+  const point = path.find(p => p.age === clamped) || path[path.length - 1];
+  return point.balance;
+}
+
+// Simulates the accumulation phase: balance grows by the same return assumption,
+// plus a fixed monthly contribution added each year — no withdrawals.
+function accumulate(startBalance, startAge, monthlySavings, params, maxAge) {
+  let balance = startBalance;
+  const path = [{ age: startAge, balance }];
+  for (let age = startAge; age < maxAge; age++) {
+    balance += monthlySavings * 12;
+    balance *= (1 + params.growthRate);
+    path.push({ age: age + 1, balance });
+  }
+  return path;
+}
+
+// Finds the first age at which accumulated savings meet the required FIRE number
+// for retiring at that same age (reusing solveRequiredBalance for each candidate age).
+function findFireAge(startBalance, startAge, monthlySavings, monthlySpend, params, maxAge) {
+  const accPath = accumulate(startBalance, startAge, monthlySavings, params, maxAge);
+  for (const point of accPath) {
+    const required = solveRequiredBalance(monthlySpend, point.age, params);
+    if (point.balance >= required) {
+      return { age: point.age, required, path: accPath.filter(p => p.age <= point.age) };
+    }
+  }
+  return null;
 }
 
 // ---------- Chart ----------
@@ -347,20 +447,43 @@ function recalculate() {
   const age = +els.age.value;
   const money = currencyMeta().symbol;
 
-  let headline, caption, eyebrow, chartResult, statWithdrawal, statLasts;
-  const pensionTotal = params.pensions.reduce((s, p) => s + p.amount, 0);
+  let headline, caption, eyebrow, chartResult, fireStartAge;
 
   if (currentMode === 'need') {
     const targetAge = +els.targetAge.value;
     const spend = +els.spend.value;
     const required = solveRequiredBalance(spend, targetAge, params);
     chartResult = simulate(required, targetAge, spend, params);
+    fireStartAge = targetAge;
 
     eyebrow = 'Du behöver';
     headline = fmtMoney(required);
     caption = `för att kunna gå FIRE vid ${targetAge} års ålder, med en konsumtion på ${fmtMoney(spend)}/månad i dagens pengar.`;
-    statWithdrawal = fmtMoney(spend);
-    statLasts = `${params.lifespan}+`;
+
+  } else if (currentMode === 'when') {
+    const balance = +els.balance.value;
+    const monthlySavings = +els.savings.value;
+    const spend = +els.spend.value;
+    const maxAge = params.lifespan;
+    const found = findFireAge(balance, age, monthlySavings, spend, params, maxAge);
+
+    if (found) {
+      // continue the chart through retirement too, so the x-axis always spans
+      // all the way to the end age, same as every other mode.
+      const startBalance = found.path[found.path.length - 1].balance;
+      const decum = simulate(startBalance, found.age, spend, params);
+      chartResult = { path: found.path.concat(decum.path.slice(1)), failedAtAge: decum.failedAtAge };
+      fireStartAge = found.age;
+      eyebrow = 'Du når FIRE om';
+      headline = `${found.age - age} år`;
+      caption = `vid ${found.age} års ålder, med ${fmtMoney(monthlySavings)}/månad i sparande utöver ditt nuvarande kapital, och en konsumtion på ${fmtMoney(spend)}/månad i dagens pengar.`;
+    } else {
+      chartResult = { path: accumulate(balance, age, monthlySavings, params, maxAge), failedAtAge: null };
+      fireStartAge = null;
+      eyebrow = 'Med nuvarande sparande';
+      headline = 'Räcker inte';
+      caption = `inom de kommande ${maxAge - age} åren (till ${maxAge} års ålder), med ${fmtMoney(monthlySavings)}/månad i sparande och en konsumtion på ${fmtMoney(spend)}/månad.`;
+    }
 
   } else if (currentMode === 'status') {
     const balance = +els.balance.value;
@@ -370,49 +493,53 @@ function recalculate() {
     const ranOut = result.failedAtAge !== null;
     const preservedOk = !params.preserveCapital || finalBalance >= balance;
     const ready = !ranOut && preservedOk;
+    fireStartAge = age;
+
+    // always chart what's actually configured — your real capital and spend —
+    // never a hypothetical target scenario, so the graph always matches the inputs.
+    chartResult = result;
 
     if (ready) {
-      chartResult = result;
       eyebrow = 'Du är redo';
       headline = 'Ja.';
       caption = `Ditt kapital räcker hela vägen till ${params.lifespan} år med en konsumtion på ${fmtMoney(spend)}/månad.`;
-      statLasts = `${params.lifespan}+`;
     } else {
-      // not ready: chart the required scenario instead of the shortfall, so the
-      // graph visibly reflects the chosen withdrawal strategy, same as "need" mode.
       const required = solveRequiredBalance(spend, age, params);
-      chartResult = simulate(required, age, spend, params);
-      statLasts = `${params.lifespan}+`;
       if (ranOut) {
         eyebrow = 'Inte riktigt än';
         headline = fmtMoney(required - balance);
-        caption = `så mycket mer behöver du. Med dagens kapital tar pengarna slut vid ${result.failedAtAge} års ålder.`;
+        caption = `så mycket mer behöver du. Med ditt nuvarande kapital tar pengarna slut vid ${result.failedAtAge} års ålder, som grafen visar.`;
       } else {
         eyebrow = 'Nästan — men du äter av kapitalet';
         headline = fmtMoney(required - balance);
-        caption = `så mycket mer behöver du för att aldrig äta av grundplåten. Med dagens kapital räcker pengarna till ${params.lifespan} år, men då har du bara ${fmtMoney(finalBalance)} kvar av de ${fmtMoney(balance)} du började med.`;
+        caption = `så mycket mer behöver du för att aldrig äta av grundplåten. Grafen visar hur ditt nuvarande kapital äts upp — vid ${params.lifespan} år har du bara ${fmtMoney(finalBalance)} kvar.`;
       }
     }
-    statWithdrawal = fmtMoney(spend);
 
   } else {
     const balance = +els.balance.value;
     const maxSpend = solveMaxSpend(balance, age, params);
     chartResult = simulate(balance, age, maxSpend, params);
+    fireStartAge = age;
 
     eyebrow = 'Du kan ta ut';
     headline = `${fmtMoney(maxSpend)}/mån`;
     caption = `riskfritt varje månad, i dagens pengar, utan att kapitalet tar slut före ${params.lifespan} års ålder.`;
-    statWithdrawal = fmtMoney(maxSpend);
-    statLasts = `${params.lifespan}+`;
   }
 
   document.getElementById('result-eyebrow').textContent = eyebrow;
   document.getElementById('result-figure').textContent = headline;
   document.getElementById('result-caption').textContent = caption;
-  document.getElementById('stat-lasts').textContent = statLasts;
-  document.getElementById('stat-withdrawal').textContent = statWithdrawal;
-  document.getElementById('stat-pension').textContent = pensionTotal > 0 ? `${fmtMoney(pensionTotal)}` : '—';
+
+  // three consistent checkpoints, in every mode: capital when FIRE starts,
+  // when pension kicks in (if any), and at the end age.
+  const pensionStartAge = params.pensions.length ? Math.min(...params.pensions.map(p => p.startAge)) : null;
+  document.getElementById('stat-lasts').textContent =
+    fireStartAge !== null ? fmtMoney(capitalAtAge(chartResult.path, fireStartAge)) : '—';
+  document.getElementById('stat-withdrawal').textContent =
+    pensionStartAge !== null ? fmtMoney(capitalAtAge(chartResult.path, pensionStartAge)) : '—';
+  document.getElementById('stat-pension').textContent =
+    fmtMoney(chartResult.path[chartResult.path.length - 1].balance);
 
   drawChart(chartResult.path, chartResult.failedAtAge);
 }

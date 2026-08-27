@@ -131,7 +131,7 @@ body {
 
 .field-group {
   padding: 32px 0;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 2px solid var(--ink);
 }
 
 .field-group:first-child { padding-top: 0; }
@@ -149,12 +149,19 @@ body {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 4px 12px;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 .field:last-child { margin-bottom: 0; }
 
-.field--compact { margin-bottom: 20px; }
+.field--compact { margin-bottom: 24px; }
+
+/* wrapper divs whose only/last child is a .field — without this, that field's own
+   margin-bottom gets zeroed by :last-child, collapsing the gap to whatever follows. */
+#single-return,
+#sub-buckets {
+  margin-bottom: 32px;
+}
 
 .field__label {
   font-size: 14px;
@@ -260,7 +267,7 @@ body {
   font-size: 12px;
   color: var(--ink-soft);
   line-height: 1.4;
-  margin: 12px 0 0;
+  margin: 12px 0 32px;
 }
 
 .field--compact + .field-hint {
@@ -269,7 +276,7 @@ body {
 
 /* ---------- Toggles ---------- */
 
-.toggle-row { margin-bottom: 24px; }
+.toggle-row { margin-bottom: 32px; }
 .toggle-row:last-child { margin-bottom: 0; }
 
 .switch {
@@ -338,7 +345,8 @@ body {
   gap: 20px;
 }
 
-.pension-card {
+.pension-card,
+.asset-card {
   padding: 16px;
   background: var(--paper-raised);
   border: 1px solid var(--rule);
@@ -346,7 +354,17 @@ body {
 }
 
 .pension-card .switch { margin-bottom: 14px; }
-.pension-card .field:last-child { margin-bottom: 0; }
+.pension-card .field:last-child,
+.asset-card .field:last-child { margin-bottom: 0; }
+
+.asset-card { margin-bottom: 16px; }
+.asset-card:last-of-type { margin-bottom: 0; }
+.asset-card > .switch__label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
 
 /* ---------- Result panel ---------- */
 
