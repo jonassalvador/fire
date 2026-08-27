@@ -47,14 +47,8 @@ const singleReturnBlock = document.getElementById('single-return');
 const bucketsBlock = document.getElementById('sub-buckets');
 
 // bucket allocation only makes sense during decumulation ("Är jag redo?" / "Hur mycket
-// kan jag ta ut?") — a more conservative, already-retired mix. Accumulation ("Hur mycket
-// behöver jag?" / "När når jag FIRE?") always assumes one simple, likely stock-heavy rate.
-function isDecumulationMode() {
-  return currentMode === 'status' || currentMode === 'withdraw';
-}
-
 function updateReturnVisibility() {
-  const showBuckets = isDecumulationMode() && bucketToggle.checked;
+  const showBuckets = bucketToggle.checked;
   singleReturnBlock.hidden = showBuckets;
   bucketsBlock.hidden = !showBuckets;
 }
@@ -150,7 +144,7 @@ function getParams() {
   const taxOn = els['toggle-tax'].checked;
   const capitalTaxOn = els['toggle-capitaltax'].checked;
   const pensionsOn = els['toggle-pensions'].checked;
-  const useBuckets = isDecumulationMode() && els['toggle-buckets'].checked;
+  const useBuckets = els['toggle-buckets'].checked;
 
   // blended return across the three allocation buckets (stocks/bonds/savings) —
   // withdrawal order doesn't matter here since there's no volatility in this model,
