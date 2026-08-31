@@ -91,7 +91,37 @@ body {
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
+/* while every label fits on one line, centering the badge against it reads
+   best — but the moment ANY tab wraps to two lines, centering leaves the
+   single-line tabs' badges floating oddly against the multi-line ones, so
+   every tab switches to top alignment together (JS toggles this class by
+   actually measuring rendered label heights — a pure breakpoint can't know
+   this, since it depends on which label text is longest, not just viewport
+   width). */
+.modes.is-wrapped .modes__tab {
+  align-items: flex-start;
+}
+
 .modes__tab:hover { color: var(--ink); }
+
+/* below ~640px, four full labels can't fit side by side without wrapping
+   into a cramped, multi-line tower — let the bar scroll horizontally
+   instead, one line per tab, same as a standard mobile segmented-tab
+   strip; the scrollbar itself is hidden since swiping is the expected way
+   to reach it, not scrollbar-dragging. */
+@media (max-width: 640px) {
+  .modes {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .modes::-webkit-scrollbar { display: none; }
+  .modes__tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 18px 14px;
+  }
+}
 
 .modes__tab.is-active {
   color: var(--ink);
@@ -128,7 +158,10 @@ body {
 }
 
 @media (max-width: 880px) {
-  .layout { grid-template-columns: 1fr; gap: 48px; }
+  /* plain 1fr, like an unstyled flex item, won't shrink below its content's
+     own natural width — minmax(0, 1fr) is needed so the single column
+     actually shrinks to fit the viewport instead of forcing it wider. */
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 48px; }
 }
 
 .result-column {
@@ -165,7 +198,7 @@ body {
 
 .field {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px 12px;
   margin-bottom: 32px;
 }
@@ -269,6 +302,11 @@ body {
 
 .strategy-toggle__option {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-wrap: break-word;
   text-align: center;
   padding: 10px 12px;
   font-size: 13px;

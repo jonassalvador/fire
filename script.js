@@ -5,8 +5,35 @@ document.querySelectorAll('input, select').forEach(el => els[el.id] = el);
 document.querySelectorAll('output').forEach(el => els[el.id] = el);
 
 let currentMode = 'need';
+const modesNav = document.querySelector('.modes');
 const modeTabs = document.querySelectorAll('.modes__tab');
 const modeFields = document.querySelectorAll('[data-modes]');
+
+// Whether the badge+label pair reads best centered (every label fits on one
+// line) or top-aligned (at least one has wrapped to two+ lines) depends on
+// the actual rendered text, not just the viewport width — a label can wrap
+// at all sorts of in-between widths depending on which word breaks where, so
+// this measures real label heights instead of guessing from a breakpoint.
+function updateModesAlignment() {
+  let wrapped = false;
+  document.querySelectorAll('.modes__label').forEach(label => {
+    // counting actual line boxes (via a Range over the text) rather than
+    // comparing scrollHeight to line-height — line-height often computes to
+    // the unresolved keyword "normal" rather than a pixel value, which broke
+    // that comparison silently instead of just being less precise.
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    if (range.getClientRects().length > 1) wrapped = true;
+  });
+  modesNav.classList.toggle('is-wrapped', wrapped);
+}
+
+window.addEventListener('resize', updateModesAlignment);
+if (document.fonts && document.fonts.ready) {
+  // the label font (Inter) loads asynchronously — re-check once it's actually
+  // in, since the fallback font's line-wrapping can differ from the real one.
+  document.fonts.ready.then(updateModesAlignment);
+}
 
 modeTabs.forEach(tab => {
   tab.addEventListener('click', () => {
@@ -817,3 +844,4 @@ document.querySelectorAll('input[type="range"], select, input[type="checkbox"]')
 
 updateVisibility();
 recalculate();
+updateModesAlignment();
