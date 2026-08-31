@@ -69,12 +69,16 @@ body {
   display: flex;
   gap: 0;
   border-bottom: 2px solid var(--rule);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--paper);
 }
 
 .modes__tab {
   flex: 1;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   padding: 22px 16px;
   background: none;
@@ -95,8 +99,17 @@ body {
 }
 
 .modes__num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .modes__label {
@@ -123,7 +136,9 @@ body {
   flex-direction: column;
   gap: 24px;
   position: sticky;
-  top: 32px;
+  /* the sticky tab bar (~67px tall) sits above this at top:0, so this needs
+     to clear it before adding its own normal 32px breathing room. */
+  top: calc(67px + 32px);
 }
 
 @media (max-width: 880px) {
