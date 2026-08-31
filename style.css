@@ -28,6 +28,10 @@ body {
   padding: 0 32px 80px;
 }
 
+@media (max-width: 640px) {
+  body { padding-left: 16px; padding-right: 16px; }
+}
+
 /* ---------- Masthead ---------- */
 
 .masthead {
@@ -73,6 +77,16 @@ body {
   top: 0;
   z-index: 10;
   background: var(--paper);
+  /* with viewport-fit=cover, content extends edge-to-edge under the notch —
+     without this, the sticky bar sticks at the CSS viewport's top (below
+     the notch) instead of the true screen top, leaving a strip above it
+     where whatever's currently scrolled underneath shows through instead
+     of this bar's own background. Padding (not margin) so the bar's own
+     background paints all the way up into that strip too. */
+  padding-top: env(safe-area-inset-top);
+  /* keeps iOS Safari from occasionally lagging a frame behind on scroll,
+     which briefly shows the same gap even with the safe-area fix above. */
+  transform: translateZ(0);
 }
 
 .modes__tab {
@@ -277,6 +291,19 @@ body {
   background: var(--paper);
   border: 2px solid var(--ink);
   cursor: pointer;
+}
+
+/* bigger grab target on touch devices — 16px reads fine with a mouse
+   pointer, but is fiddly to pick up precisely with a fingertip. */
+@media (max-width: 640px) {
+  .field input[type="range"]::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+  }
+  .field input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 .field--select select {
@@ -512,7 +539,7 @@ body {
 
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin: 32px 0 0;
   padding-top: 24px;
@@ -533,6 +560,12 @@ body {
   font-size: 20px;
   font-weight: 500;
   margin: 0;
+  /* the formatted number uses non-breaking spaces between digit groups (so
+     it never breaks mid-number in normal cases) — but at extreme values in
+     a narrow column that can be wider than the column itself; this is the
+     last-resort fallback so it wraps instead of visually overlapping the
+     next column, rather than actually forcing the page wider. */
+  overflow-wrap: break-word;
 }
 
 /* ---------- Footer ---------- */
