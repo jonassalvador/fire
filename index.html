@@ -28,7 +28,7 @@
   </button>
   <button class="modes__tab" data-mode="status" role="tab" aria-selected="false">
     <span class="modes__num">03</span>
-    <span class="modes__label">Är jag redo nu?</span>
+    <span class="modes__label">Är jag redo?</span>
   </button>
   <button class="modes__tab" data-mode="withdraw" role="tab" aria-selected="false">
     <span class="modes__num">04</span>
@@ -41,42 +41,12 @@
   <section class="panel panel--inputs">
 
     <div class="field-group">
-      <h2 class="field-group__title">Om dig</h2>
-
-      <label class="field" data-modes="when status withdraw">
-        <span class="field__label">Din ålder</span>
-        <span class="field__value"><output id="out-age">35</output> år</span>
-        <input type="range" id="age" min="18" max="99" value="35" step="1">
-      </label>
-
-      <label class="field" data-modes="when status withdraw">
-        <span class="field__label">Nuvarande sparkapital</span>
-        <span class="field__value"><output id="out-balance">5 000 000</output> <span class="unit"></span></span>
-        <input type="range" id="balance" min="0" max="30000000" value="5000000" step="100000">
-      </label>
-
-      <label class="field" data-modes="when">
-        <span class="field__label">Månatligt sparande</span>
-        <span class="field__value"><output id="out-savings">15 000</output> <span class="unit"></span></span>
-        <input type="range" id="savings" min="0" max="100000" value="15000" step="1000">
-      </label>
-
-      <label class="field" data-modes="need">
-        <span class="field__label">Vid vilken ålder vill du gå FIRE</span>
-        <span class="field__value"><output id="out-targetAge">50</output> år</span>
-        <input type="range" id="targetAge" min="18" max="99" value="50" step="1">
-      </label>
+      <h2 class="field-group__title">Målbild</h2>
 
       <label class="field" data-modes="need when status">
-        <span class="field__label">Önskad månadskonsumtion, i dagens pengar</span>
-        <span class="field__value"><output id="out-spend">25 000</output> <span class="unit"></span></span>
-        <input type="range" id="spend" min="5000" max="150000" value="25000" step="1000">
-      </label>
-
-      <label class="field">
-        <span class="field__label">Räkna till ålder</span>
-        <span class="field__value"><output id="out-lifespan">95</output> år</span>
-        <input type="range" id="lifespan" min="80" max="105" value="95" step="1">
+        <span class="field__label">Önskad månadskonsumtion</span>
+        <span class="field__value"><output id="out-spend">30 000</output> <span class="unit"></span></span>
+        <input type="range" id="spend" min="5000" max="150000" value="30000" step="1000">
       </label>
 
       <div class="strategy-toggle">
@@ -88,190 +58,180 @@
           <input type="radio" name="strategy" id="strategy-die" value="die">
           <span>Die With Zero</span>
         </label>
+        <label class="strategy-toggle__option">
+          <input type="radio" name="strategy" id="strategy-target" value="target">
+          <span>Eget målbelopp</span>
+        </label>
       </div>
-      <p class="field-hint" id="strategy-hint">Du ska aldrig äta av det kapital du började med — bara leva på avkastningen.</p>
+
+      <div id="target-amount-fields" hidden>
+        <label class="field">
+          <span class="field__label">Målbelopp kvar vid slutåldern</span>
+          <span class="field__value"><output id="out-targetAmount">1 000 000</output> <span class="unit"></span></span>
+          <input type="range" id="targetAmount" min="0" max="30000000" value="1000000" step="100000">
+        </label>
+      </div>
+
+      <div id="die-with-zero-fields" hidden>
+        <label class="field" data-modes="need">
+          <span class="field__label">Startålder</span>
+          <span class="field__value"><output id="out-targetAge">40</output> år</span>
+          <input type="range" id="targetAge" min="0" max="100" value="40" step="1">
+        </label>
+
+        <label class="field">
+          <span class="field__label">Slutålder</span>
+          <span class="field__value"><output id="out-lifespan">90</output> år</span>
+          <input type="range" id="lifespan" min="0" max="100" value="90" step="1">
+        </label>
+      </div>
+    </div>
+
+    <div class="field-group" data-modes="when status withdraw">
+      <h2 class="field-group__title">Utgångsläge</h2>
+
+      <label class="field" data-modes="when status withdraw">
+        <span class="field__label">Din ålder</span>
+        <span class="field__value"><output id="out-age">35</output> år</span>
+        <input type="range" id="age" min="0" max="100" value="35" step="1">
+      </label>
+
+      <label class="field" data-modes="when">
+        <span class="field__label">Månatligt sparande</span>
+        <span class="field__value"><output id="out-savings">15 000</output> <span class="unit"></span></span>
+        <input type="range" id="savings" min="0" max="100000" value="15000" step="1000">
+      </label>
+
+      <label class="field">
+        <span class="field__label">Totalt investerat kapital</span>
+        <span class="field__value"><output id="out-total-capital">5 000 000</output> <span class="unit"></span></span>
+        <input type="range" id="total-capital" min="0" max="30000000" value="5000000" step="100000">
+      </label>
+
+      <div class="strategy-toggle">
+        <label class="strategy-toggle__option">
+          <input type="radio" name="capitalMode" id="capital-combined" value="combined" checked>
+          <span>Generell blandportfölj</span>
+        </label>
+        <label class="strategy-toggle__option">
+          <input type="radio" name="capitalMode" id="capital-split" value="split">
+          <span>Finjustera portfölj</span>
+        </label>
+      </div>
+      <p class="field-hint" id="capital-mode-hint">Förutsätter en generell balanserad portfölj med 60–70 % aktier och 30–40 % räntor.</p>
+
+      <div id="capital-split-fields" hidden>
+        <div class="asset-card">
+          <label class="field">
+            <span class="field__label">Aktier/fonder</span>
+            <span class="field__value"><output id="out-alloc-stocks">65</output> %</span>
+            <input type="range" id="alloc-stocks" min="0" max="100" value="65" step="1">
+          </label>
+          <p class="field-hint">Motsvarar <output id="out-alloc-stocks-kr">3 250 000</output> kr.</p>
+        </div>
+
+        <div class="asset-card">
+          <label class="field">
+            <span class="field__label">Räntor</span>
+            <span class="field__value"><output id="out-alloc-bonds">35</output> %</span>
+            <input type="range" id="alloc-bonds" min="0" max="100" value="35" step="1">
+          </label>
+          <p class="field-hint">Motsvarar <output id="out-alloc-bonds-kr">1 750 000</output> kr.</p>
+        </div>
+
+        <div class="asset-card">
+          <label class="field">
+            <span class="field__label">Sparkonto</span>
+            <span class="field__value"><output id="out-alloc-savings">0</output> %</span>
+            <input type="range" id="alloc-savings" min="0" max="100" value="0" step="1">
+          </label>
+          <p class="field-hint">Motsvarar <output id="out-alloc-savings-kr">0</output> kr.</p>
+        </div>
+      </div>
     </div>
 
     <div class="field-group">
-      <h2 class="field-group__title">Avkastning</h2>
-
-      <div class="toggle-row">
-        <label class="switch">
-          <input type="checkbox" id="toggle-buckets">
-          <span class="switch__track"></span>
-          <span class="switch__label">Dela upp kapitalet i hinkar</span>
-        </label>
-        <p class="toggle-hint">Fördela mellan aktier/fonder, räntor och sparkonto med egen avkastning för varje.</p>
-      </div>
+      <h2 class="field-group__title">Antaganden</h2>
 
       <div id="single-return">
         <label class="field">
-          <span class="field__label">Förväntad årlig avkastning (förutsätter 100% aktier/fonder)</span>
+          <span class="field__label">Förväntad avkastning (Generell blandportfölj)</span>
           <span class="field__value"><output id="out-return">7</output> %</span>
           <input type="range" id="return" min="0" max="15" value="7" step="0.1">
         </label>
+        <p class="field-hint">Antar att kapitalet ligger i en ISK och beskattas schablonmässigt med cirka 1 % per år.</p>
       </div>
 
-      <div id="sub-buckets" hidden>
+      <div id="bucket-returns" hidden>
+        <label class="field">
+          <span class="field__label">Förväntad avkastning (Aktier/fonder)</span>
+          <span class="field__value"><output id="out-return-stocks">9</output> %</span>
+          <input type="range" id="return-stocks" min="0" max="15" value="9" step="0.1">
+        </label>
+        <p class="field-hint">Antas ligga i en ISK (schablonskatt cirka 1 % av värdet) — uttag är därför skattefria.</p>
 
-      <div class="asset-card">
-        <span class="switch__label">Aktier/fonder</span>
-        <label class="field field--compact">
-          <span class="field__label">Andel av kapitalet</span>
-          <span class="field__value"><output id="out-alloc-stocks">70</output> %</span>
-          <input type="range" id="alloc-stocks" min="0" max="100" value="70" step="1">
-        </label>
-        <label class="field field--compact">
-          <span class="field__label">Förväntad avkastning</span>
-          <span class="field__value"><output id="out-return-stocks">7</output> %</span>
-          <input type="range" id="return-stocks" min="0" max="15" value="7" step="0.1">
-        </label>
-      </div>
-
-      <div class="asset-card">
-        <span class="switch__label">Räntor</span>
-        <label class="field field--compact">
-          <span class="field__label">Andel av kapitalet</span>
-          <span class="field__value"><output id="out-alloc-bonds">20</output> %</span>
-          <input type="range" id="alloc-bonds" min="0" max="30" value="20" step="1">
-        </label>
-        <label class="field field--compact">
-          <span class="field__label">Förväntad avkastning</span>
+        <label class="field">
+          <span class="field__label">Förväntad avkastning (Räntor)</span>
           <span class="field__value"><output id="out-return-bonds">3</output> %</span>
           <input type="range" id="return-bonds" min="0" max="10" value="3" step="0.1">
         </label>
-      </div>
+        <p class="field-hint">Antas ligga utanför ISK — ingen årlig skatt, men kapitalvinstskatt (30 %) på vinsten vid uttag.</p>
 
-      <div class="asset-card">
-        <span class="switch__label">Sparkonto</span>
-        <label class="field field--compact">
-          <span class="field__label">Andel av kapitalet (resten)</span>
-          <span class="field__value"><output id="out-alloc-savings">10</output> %</span>
-        </label>
-        <label class="field field--compact">
-          <span class="field__label">Förväntad avkastning</span>
+        <label class="field">
+          <span class="field__label">Förväntad avkastning (Sparkonto)</span>
           <span class="field__value"><output id="out-return-savings">2</output> %</span>
           <input type="range" id="return-savings" min="0" max="6" value="2" step="0.1">
         </label>
+        <p class="field-hint">Räntan beskattas löpande som inkomst av kapital (30 %) — uttag är därför skattefria.</p>
       </div>
 
-      <p class="field-hint" id="blended-return-hint">Blandad avkastning: 6,5 %</p>
-      </div>
-
-      <div class="toggle-row">
-        <label class="switch">
-          <input type="checkbox" id="toggle-inflation" checked>
-          <span class="switch__track"></span>
-          <span class="switch__label">Räkna med inflation</span>
-        </label>
-        <div class="toggle-row__sub" id="sub-inflation">
-          <label class="field field--compact">
-            <span class="field__label">Förväntad inflation</span>
-            <span class="field__value"><output id="out-inflation">2</output> %</span>
-            <input type="range" id="inflation" min="0" max="8" value="2" step="0.1">
-          </label>
-        </div>
-      </div>
-
-      <div class="toggle-row">
-        <label class="switch">
-          <input type="checkbox" id="toggle-capitaltax" checked>
-          <span class="switch__track"></span>
-          <span class="switch__label">Räkna med skatt på kapitalet (t.ex. ISK)</span>
-        </label>
-        <p class="toggle-hint">För ISK/kapitalförsäkring: en årlig avgift på hela värdet, oavsett uttag.</p>
-        <div class="toggle-row__sub" id="sub-capitaltax">
-          <label class="field field--compact">
-            <span class="field__label">Årlig skatt på kapitalet</span>
-            <span class="field__value"><output id="out-capitaltax">1</output> %</span>
-            <input type="range" id="capitaltax" min="0" max="3" value="1" step="0.1">
-          </label>
-        </div>
-      </div>
-
-      <div class="toggle-row">
-        <label class="switch">
-          <input type="checkbox" id="toggle-tax">
-          <span class="switch__track"></span>
-          <span class="switch__label">Räkna med skatt på uttag</span>
-        </label>
-        <p class="toggle-hint">För vanlig aktiedepå: skatt bara på det du faktiskt tar ut.</p>
-        <div class="toggle-row__sub" id="sub-tax" hidden>
-          <label class="field field--compact">
-            <span class="field__label">Skattesats vid uttag</span>
-            <span class="field__value"><output id="out-tax">30</output> %</span>
-            <input type="range" id="tax" min="0" max="60" value="30" step="1">
-          </label>
-        </div>
-      </div>
+      <label class="field">
+        <span class="field__label">Förväntad inflation</span>
+        <span class="field__value"><output id="out-inflation">2</output> %</span>
+        <input type="range" id="inflation" min="0" max="8" value="2" step="0.1">
+      </label>
     </div>
 
     <div class="field-group">
       <h2 class="field-group__title">Pension</h2>
 
-      <div class="toggle-row">
-        <label class="switch">
-          <input type="checkbox" id="toggle-pensions">
-          <span class="switch__track"></span>
-          <span class="switch__label">Räkna med kommande pensioner</span>
+      <div class="strategy-toggle">
+        <label class="strategy-toggle__option">
+          <input type="radio" name="pensionMode" id="pension-ignore" value="ignore" checked>
+          <span>Ignorera pension</span>
         </label>
-        <div class="toggle-row__sub toggle-row__sub--pensions" id="sub-pensions" hidden>
-
-          <div class="pension-card">
-            <label class="switch switch--small">
-              <input type="checkbox" id="toggle-pension1" checked>
-              <span class="switch__track"></span>
-              <span class="switch__label">Allmän pension</span>
-            </label>
-            <label class="field field--compact">
-              <span class="field__label">Belopp per månad, före skatt</span>
-              <span class="field__value"><output id="out-pension1amount">12 000</output> <span class="unit"></span></span>
-              <input type="range" id="pension1amount" min="0" max="40000" value="12000" step="1000">
-            </label>
-            <label class="field field--compact">
-              <span class="field__label">Från vilken ålder</span>
-              <span class="field__value"><output id="out-pension1age">69</output> år</span>
-              <input type="range" id="pension1age" min="60" max="75" value="69" step="1">
-            </label>
-            <label class="field field--compact">
-              <span class="field__label">Skattesats</span>
-              <span class="field__value"><output id="out-pension1tax">32</output> %</span>
-              <input type="range" id="pension1tax" min="0" max="60" value="32" step="1">
-            </label>
-          </div>
-
-          <div class="pension-card">
-            <label class="switch switch--small">
-              <input type="checkbox" id="toggle-pension2" checked>
-              <span class="switch__track"></span>
-              <span class="switch__label">Tjänstepension</span>
-            </label>
-            <label class="field field--compact">
-              <span class="field__label">Belopp per månad, före skatt</span>
-              <span class="field__value"><output id="out-pension2amount">6 000</output> <span class="unit"></span></span>
-              <input type="range" id="pension2amount" min="0" max="40000" value="6000" step="1000">
-            </label>
-            <label class="field field--compact">
-              <span class="field__label">Från vilken ålder</span>
-              <span class="field__value"><output id="out-pension2age">69</output> år</span>
-              <input type="range" id="pension2age" min="55" max="75" value="69" step="1">
-            </label>
-            <label class="field field--compact">
-              <span class="field__label">Skattesats</span>
-              <span class="field__value"><output id="out-pension2tax">30</output> %</span>
-              <input type="range" id="pension2tax" min="0" max="60" value="30" step="1">
-            </label>
-          </div>
-
-          <p class="field-hint">Pension beskattas som vanlig inkomst — inte samma sats som skatt på uttag.</p>
-
-        </div>
+        <label class="strategy-toggle__option">
+          <input type="radio" name="pensionMode" id="pension-count" value="count">
+          <span>Räkna med pension</span>
+        </label>
       </div>
 
+      <div id="pension-fields" hidden>
+      <label class="field">
+        <span class="field__label">Allmän pension, per månad, före skatt</span>
+        <span class="field__value"><output id="out-pension1amount">15 000</output> <span class="unit"></span></span>
+        <input type="range" id="pension1amount" min="0" max="40000" value="15000" step="1000">
+      </label>
+
+      <label class="field">
+        <span class="field__label">Tjänstepension, per månad, före skatt</span>
+        <span class="field__value"><output id="out-pension2amount">5 000</output> <span class="unit"></span></span>
+        <input type="range" id="pension2amount" min="0" max="40000" value="5000" step="1000">
+      </label>
+
+      <label class="field">
+        <span class="field__label">Från vilken ålder</span>
+        <span class="field__value"><output id="out-pensionage">65</output> år</span>
+        <input type="range" id="pensionage" min="55" max="75" value="65" step="1">
+      </label>
+
+      <p class="field-hint field-hint--section">Kolla dina egna prognoser på <a href="https://www.minpension.se" target="_blank" rel="noopener">minpension.se</a> — men kom ihåg att ställa om prognosen till att sluta betala in och bara utgå från beloppet som finns där idag, annars räknar den med att du fortsätter jobba fram till riktåldern. Uttag beskattas som inkomst — vi räknar schablonmässigt med 30%.</p>
+      </div>
     </div>
 
   </section>
 
+  <div class="result-column">
   <section class="panel panel--result">
     <div class="result">
       <p class="result__eyebrow" id="result-eyebrow">Du behöver</p>
@@ -287,19 +247,31 @@
 
     <dl class="stats-row" id="stats-row">
       <div class="stats-row__item">
-        <dt>Kapital vid FIRE</dt>
+        <dt id="dt-lasts">Kapital vid FIRE</dt>
         <dd id="stat-lasts">95+</dd>
       </div>
       <div class="stats-row__item">
-        <dt>Kapital vid pension</dt>
+        <dt id="dt-withdrawal">Kapital vid pension</dt>
         <dd id="stat-withdrawal">—</dd>
       </div>
       <div class="stats-row__item">
-        <dt>Kapital vid slutålder</dt>
+        <dt id="dt-pension">Kapital vid slutålder</dt>
         <dd id="stat-pension">—</dd>
       </div>
     </dl>
   </section>
+
+  <section class="panel comparison-box">
+    <p class="comparison-box__eyebrow">Jämfört med en enkel uttagsregel</p>
+    <p class="comparison-box__result" id="comparison-result">—</p>
+    <label class="field field--compact">
+      <span class="field__label">Säker uttagsprocent</span>
+      <span class="field__value"><output id="out-comparerate">4</output> %</span>
+      <input type="range" id="comparerate" min="2" max="6" value="4" step="0.25">
+    </label>
+    <p class="field-hint field-hint--section">4% är den klassiska tumregeln, kalibrerad för ~30 års amerikansk pension. För tidig FIRE (längre horisont) och svenska/internationella marknader pekar senare forskning snarare mot 3–3,5%.</p>
+  </section>
+  </div>
 
 </main>
 
