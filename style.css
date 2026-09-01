@@ -200,6 +200,10 @@ body {
 }
 
 .field-group:first-child { padding-top: 0; }
+/* "Utgångsläge" (now first) is itself hidden in "Hur mycket behöver jag?" —
+   when that happens, "Fire-mål" right after it is really the first visible
+   group, so it needs the same zeroing instead. */
+.field-group:first-child.mode-hidden + .field-group { padding-top: 0; }
 
 .field-group__title {
   font-family: var(--mono);
@@ -208,6 +212,75 @@ body {
   text-transform: uppercase;
   color: var(--ink-soft);
   margin: 0 0 24px;
+}
+
+/* collapsible field-groups (Tillväxt, Inflation, Skatter) wrap the title in
+   a button instead of using it bare — the button carries the same 24px
+   bottom margin the plain .field-group__title has elsewhere, so the title
+   itself is zeroed out to avoid doubling it up. The button's own box model
+   is untouched (no padding/margin changes), so the visible layout is
+   identical to a plain, non-collapsible field-group. */
+.field-group__header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0 24px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.field-group__header .field-group__title {
+  margin: 0;
+}
+
+.field-group__header:hover .field-group__title {
+  color: var(--ink);
+}
+
+/* collapsed (content hidden) — the header is the only visible thing left in
+   the group, so it needs the same last-visible-element zeroing every other
+   collapsible control in this file gets, instead of adding its 24px on top
+   of the field-group's own bottom padding. */
+.field-group__header:has(+ .field-group__content[hidden]) {
+  margin-bottom: 0;
+}
+
+/* the actual clickable region — an invisible, absolutely-positioned (so it
+   can't affect layout at all) box stretched well past the visible title
+   text in every direction, as far as it can safely go without overlapping
+   anything else: up through this field-group's own top padding (into the
+   dead space right up to the divider above), and down through the gap to
+   the first slider — or, when collapsed, all the way to this field-group's
+   own bottom padding, since nothing else is there to click. */
+.field-group__header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -32px;
+  bottom: -24px;
+}
+
+.field-group__header:has(+ .field-group__content[hidden])::before {
+  bottom: -32px;
+}
+
+.field-group__chevron {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  transition: transform 0.25s ease;
+}
+
+.field-group__header[aria-expanded="true"] .field-group__chevron {
+  transform: rotate(180deg);
 }
 
 .field {
@@ -220,14 +293,6 @@ body {
 .field:last-child { margin-bottom: 0; }
 
 .field--compact { margin-bottom: 24px; }
-
-/* wrapper divs whose own trailing content ends in a .field or a .field-hint
-   that's :last-child of its own (possibly nested) container — without this,
-   that margin gets zeroed and the gap collapses to whatever follows. */
-#single-return,
-#bucket-returns {
-  margin-bottom: 32px;
-}
 
 /* white card around each hink in "Finjustera portfölj" — its .field/.field-hint
    pair keeps their normal internal spacing (the rules below still apply
@@ -395,22 +460,16 @@ body {
    (not a hint) instead gets the section's normal field-to-field spacing, so
    it reads like just another control in the list. */
 .strategy-toggle { margin-bottom: 14px; }
-.strategy-toggle:has(+ .field),
-.strategy-toggle:has(+ #pension-fields),
-.strategy-toggle:has(+ #target-amount-fields) { margin-bottom: 32px; }
-/* ...except when the wrapper right after is actually hidden ("Ignorera
-   pension", "Bevara kapitalet") — then the toggle is really the last visible
-   thing in the section, so it needs zeroing just like any other last-visible
-   element, instead of adding its 32px on top of the field-group's own padding.
-   Målbild has two wrappers in a row (målbelopp, then start/slutålder) — the
-   toggle is only truly last-visible when BOTH are hidden ("Bevara kapitalet"). */
-.strategy-toggle:has(+ #pension-fields[hidden]),
-.strategy-toggle:has(+ #target-amount-fields[hidden] + #die-with-zero-fields[hidden]) { margin-bottom: 0; }
-/* ...and the reverse case: when the capital-mode hint (which normally sits
-   tight against the switch) is itself hidden ("Finjustera portföljen" has no
-   hint), the switch reads as if it were directly followed by the bucket
-   cards, so it needs their normal 32px instead of the hint-coupling 14px. */
-.strategy-toggle:has(+ #capital-mode-hint[hidden]) { margin-bottom: 32px; }
+.strategy-toggle:has(+ .field) { margin-bottom: 32px; }
+/* strategy-hint, pension-hint and capital-mode-hint are always visible now
+   (only their wording changes with the switch) — so the toggle's base 14px
+   tight-coupling to the hint right after it always applies, no override
+   needed. The hint's own default 32px bottom margin is already correct
+   whenever the wrapper after it is visible (normal spacing before real
+   content) — it only needs zeroing when that wrapper is hidden instead,
+   making the hint the last visible thing in the section. */
+#strategy-hint:has(+ #die-with-zero-fields[hidden]),
+#pension-hint:has(+ #pension-fields[hidden]) { margin-bottom: 0; }
 
 /* a hint explaining the switch right above it should read as part of that
    switch, not as its own loosely-spaced section — true for every
@@ -427,14 +486,6 @@ body {
    — when that card is hidden ("Generell balanserad portfölj"), the hint is
    really the last visible thing in the section, so needs the same zeroing. */
 .field-hint:has(+ #capital-split-fields[hidden]:last-child) { margin-bottom: 0; }
-/* "Målbelopp kvar vid slutåldern" is the only (so also last) field inside
-   #target-amount-fields, normally zeroed by the generic .field:last-child
-   rule since it's usually the last visible thing in Målbild too — but when
-   "Die With Zero" or "Eget målbelopp" also shows #die-with-zero-fields right
-   after it, it needs its normal field-to-field spacing back instead. */
-#target-amount-fields:has(+ #die-with-zero-fields:not([hidden])) .field:last-child {
-  margin-bottom: 32px;
-}
 
 /* ---------- Result panel ---------- */
 

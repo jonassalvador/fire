@@ -4,6 +4,18 @@ const els = {};
 document.querySelectorAll('input, select').forEach(el => els[el.id] = el);
 document.querySelectorAll('output').forEach(el => els[el.id] = el);
 
+// Collapsible field-groups (Tillväxt & inflation, Skatter) — closed by
+// default (per the HTML's own hidden attribute); the chevron's rotation is
+// driven purely by aria-expanded in CSS, so this just needs to flip that and
+// the content's hidden state together.
+document.querySelectorAll('.field-group__header').forEach(header => {
+  header.addEventListener('click', () => {
+    const expanded = header.getAttribute('aria-expanded') === 'true';
+    header.setAttribute('aria-expanded', String(!expanded));
+    document.getElementById(header.getAttribute('aria-controls')).hidden = expanded;
+  });
+});
+
 let currentMode = 'need';
 const modesNav = document.querySelector('.modes');
 const modeTabs = document.querySelectorAll('.modes__tab');
@@ -54,28 +66,24 @@ function updateVisibility() {
 }
 
 
-const singleReturnBlock = document.getElementById('single-return');
-const bucketReturnsBlock = document.getElementById('bucket-returns');
 const capitalSplitFields = document.getElementById('capital-split-fields');
 
 function updateReturnVisibility() {
-  // mode 01 always uses the Blandportfölj rate (no buckets there at all). In
-  // tabs 2-4, Blandportfölj also covers "samlat kapital" — Aktier/fonder,
-  // Räntor and Sparkonto only come into it once you actually split into
-  // buckets, so their own rates only show then.
+  // Tillgångar still only shows the three hinkar once you actually split —
+  // Tillväxt & inflation and Skatter, by contrast, always show every slider
+  // regardless of split/combined, pension on/off, or anything else.
   const isSplit = document.querySelector('input[name="capitalMode"]:checked').value === 'split';
-  const showBucketReturns = currentMode !== 'need' && isSplit;
-  singleReturnBlock.hidden = showBucketReturns;
-  bucketReturnsBlock.hidden = !showBucketReturns;
   capitalSplitFields.hidden = !isSplit;
 
-  // only "Generell balanserad portfölj" gets an explanatory hint here — once
-  // you finjustera, the three bucket cards below speak for themselves.
+  // always visible, on either side of the switch — just what it explains
+  // changes. Blandportfölj only ever describes the assumed asset mix (its
+  // tax rate is explained under its own slider in Skatter instead); once you
+  // finjustera, the bucket cards below speak for themselves, so this points
+  // there rather than repeating each one's own explanation.
   const capitalModeHint = document.getElementById('capital-mode-hint');
-  capitalModeHint.hidden = isSplit;
-  if (!isSplit) {
-    capitalModeHint.textContent = 'Förutsätter en generell balanserad portfölj med 60–70 % aktier och 30–40 % räntor.';
-  }
+  capitalModeHint.textContent = isSplit
+    ? 'Du delar själv upp kapitalet i Aktie/fondportfölj, Ränteportfölj och Sparkonto nedan, med egen avkastning och skatt för var och en.'
+    : 'Förutsätter en generell balanserad portfölj med 60–70 % aktier och 30–40 % räntor — ett enkelt standardantagande som passar de flesta.';
 }
 
 document.querySelectorAll('input[name="capitalMode"]').forEach(radio => {
@@ -87,20 +95,27 @@ document.querySelectorAll('input[name="capitalMode"]').forEach(radio => {
 // a start nor an end age, just the spend and the growth rate — so they're
 // hidden whenever "Bevara kapitalet" is selected.
 const dieWithZeroFields = document.getElementById('die-with-zero-fields');
-const targetAmountFields = document.getElementById('target-amount-fields');
+const strategyHint = document.getElementById('strategy-hint');
 document.querySelectorAll('input[name="strategy"]').forEach(radio => {
   radio.addEventListener('change', () => {
-    const strategy = document.querySelector('input[name="strategy"]:checked').value;
-    dieWithZeroFields.hidden = strategy === 'preserve';
-    targetAmountFields.hidden = strategy !== 'target';
+    const preserve = radio.value === 'preserve';
+    dieWithZeroFields.hidden = preserve;
+    strategyHint.textContent = preserve
+      ? 'Kapitalet ska aldrig minska i värde — du lever bara på avkastningen, inte av grundplåten.'
+      : 'Kapitalet får ta slut exakt vid din valda slutålder — du spenderar medvetet ner det till noll.';
     recalculate();
   });
 });
 
 const pensionFields = document.getElementById('pension-fields');
+const pensionHint = document.getElementById('pension-hint');
 document.querySelectorAll('input[name="pensionMode"]').forEach(radio => {
   radio.addEventListener('change', () => {
-    pensionFields.hidden = radio.value === 'ignore';
+    const ignore = radio.value === 'ignore';
+    pensionFields.hidden = ignore;
+    pensionHint.textContent = ignore
+      ? 'Beräkningen bygger enbart på ditt eget sparande — ingen pension räknas in, även om du faktiskt har rätt till det.'
+      : 'Din allmänna pension och tjänstepension räknas in och minskar hur mycket du själv behöver ta ur ditt kapital.';
     recalculate();
   });
 });
@@ -203,22 +218,52 @@ function computeStartBuckets() {
   };
 }
 
+// Playful FIRE-nivå labels for "Önskad månadskonsumtion efter skatt" — purely descriptive,
+// doesn't feed into any calculation. Ranges are inclusive of their lower bound;
+// the top bucket also covers anything above 150 000 kr should the slider's
+// max ever change.
+const FIRE_LEVELS = [
+  { min: 5000, name: 'Barista FIRE', desc: 'Portföljen täcker en liten bas, men du måste fortfarande jobba deltid eller ha en sidoinkomst för att klara dig.' },
+  { min: 10000, name: 'Lean FIRE', desc: 'Du är helt fri men lever extremt minimalistiskt. Täcker endast mat, billigt boende och absoluta måsten.' },
+  { min: 15000, name: 'Slender FIRE', desc: 'Steget mellan fattig och lagom. Du har råd med lite rörliga utgifter men måste fortfarande budgetera strikt.' },
+  { min: 20000, name: 'Regular FIRE', desc: 'Den klassiska FIRE-nivån. Motsvarar en genomsnittlig svensk nettoinkomst. Du lever ett normalt, bra liv utan ekonomisk stress.' },
+  { min: 30000, name: 'Chubby FIRE', desc: 'Det välbärgade gränslandet. Du har en guldkant på tillvaron med utrymme för resor, restauranger och extra bekvämligheter.' },
+  { min: 40000, name: 'Fat FIRE', desc: 'Ren lyxnivå i Sverige. Du kan bo dyrt, resa i business class och köpa kvalitetsprodukter utan att titta på prislappen.' },
+  { min: 60000, name: 'Obese FIRE', desc: 'Extremt hög levnadsstandard. Ekonomin begränsar dig inte på något realistiskt sätt i vardagen.' },
+  { min: 100000, name: 'Whale FIRE', desc: 'Ekonomiskt oberoende på generationsnivå. Du rör dig i samma ekonomiska sfär som höginkomsttagare, egendomsägare och mångmiljonärer.' },
+];
+
+function fireLevelFor(spend) {
+  let level = FIRE_LEVELS[0];
+  for (const l of FIRE_LEVELS) {
+    if (spend >= l.min) level = l;
+  }
+  return level;
+}
+
 // keep all range outputs and unit labels in sync
 function syncDisplays() {
   const money = currencyMeta().symbol;
   els['out-age'].textContent = els.age.value;
   els['out-targetAge'].textContent = els.targetAge.value;
   els['out-spend'].textContent = fmtNumber(+els.spend.value);
+  const fireLevel = fireLevelFor(+els.spend.value);
+  document.getElementById('spend-hint').textContent = `${fireLevel.name} — ${fireLevel.desc}`;
   els['out-savings'].textContent = fmtNumber(+els.savings.value);
   els['out-total-capital'].textContent = fmtNumber(+els['total-capital'].value);
   els['out-return'].textContent = els.return.value;
   els['out-comparerate'].textContent = els.comparerate.value.replace('.', ',');
   els['out-lifespan'].textContent = els.lifespan.value;
-  els['out-targetAmount'].textContent = fmtNumber(+els.targetAmount.value);
   els['out-inflation'].textContent = els.inflation.value;
   els['out-pension1amount'].textContent = fmtNumber(+els.pension1amount.value);
   els['out-pension2amount'].textContent = fmtNumber(+els.pension2amount.value);
   els['out-pensionage'].textContent = els.pensionage.value;
+  els['out-tax-isk-blend'].textContent = els['tax-isk-blend'].value;
+  els['out-tax-isk-stocks'].textContent = els['tax-isk-stocks'].value;
+  els['out-tax-bonds'].textContent = els['tax-bonds'].value;
+  els['out-tax-savings'].textContent = els['tax-savings'].value;
+  els['out-tax-pension1'].textContent = els['tax-pension1'].value;
+  els['out-tax-pension2'].textContent = els['tax-pension2'].value;
   document.querySelectorAll('.field .unit').forEach(u => u.textContent = money);
   updateAllocationDisplay();
 }
@@ -234,68 +279,50 @@ function getParams() {
   // slider is a no-op here, so there's no need for a separate on/off toggle.
   const toReal = nominal => (1 + nominal) / (1 + inflation) - 1;
 
-  // Fixed rates, not user-adjustable, same simplification level as pension's
-  // 30% below. AF's kapitalvinstskatt (30%, on Räntor's gain at withdrawal)
-  // and sparkonto's ränteskatt (30%, on the interest as it's earned) are both
-  // genuine flat legal rates. ISK's schablonskatt (1%, on Aktier/fonder's
-  // value every year) technically floats with the state borrowing rate —
-  // it's been well under 1% in low-rate years — so this is a round-number
-  // estimate rather than a fixed rate, but good enough for this kind of tool.
-  const ISK_TAX = 0.01;
-  const AF_TAX = 0.30;
-  const SAVINGS_TAX = 0.30;
+  // Blandportfölj, Aktie/fondportfölj and Ränteportfölj are all assumed to
+  // sit in an ISK — schablonskatt, applied annually on the account's full
+  // value, withdrawals then tax-free — independently adjustable, they just
+  // happen to share the same 1% default.
+  const BLEND_TAX = +els['tax-isk-blend'].value / 100;
+  const STOCKS_TAX = +els['tax-isk-stocks'].value / 100;
+  const BONDS_TAX = +els['tax-bonds'].value / 100;
+  const SAVINGS_TAX = +els['tax-savings'].value / 100;
 
-  // The simplified 100%-aktier model (tab 1, no buckets) always assumes ISK.
-  const simpleReal = (1 + toReal(+els.return.value / 100)) * (1 - ISK_TAX) - 1;
+  // The simplified 100%-aktier model (tab 1, no buckets) always uses the
+  // Blandportfölj rate — never the Aktier/fonder bucket rate, even if
+  // "Finjustera portfölj" happens to be selected.
+  const simpleReal = (1 + toReal(+els.return.value / 100)) * (1 - BLEND_TAX) - 1;
 
   let growthRate = simpleReal;
   let stocksRate = simpleReal, bondsRate = simpleReal, savingsRate = simpleReal;
-  let taxRate = 0; // blended effective tax rate on withdrawals, from AF-taxed buckets only
-  let taxModes = null; // { stocks: 'isk'|'af', bonds: 'isk'|'af' } — used to recompute a more
-                        // accurate taxRate once we know how much a bucket has actually grown
-  let bondsTaxRate = 0; // Räntor's fixed AF rate, needed by simulateBuckets() too
+  const taxRate = 0; // every bucket here is ISK, so nothing is ever taxed at withdrawal
 
   if (useBuckets) {
-    // aktier/fonder is always assumed to sit in an ISK (taxed annually on the
-    // value), räntor always in a plain aktie-/fondkonto (AF, taxed only on the
-    // gain at withdrawal).
-    taxModes = { stocks: 'isk', bonds: 'af' };
-    bondsTaxRate = AF_TAX;
-
     // ISK: schablonskatt on the account value every year, withdrawals then free.
-    // AF (vanlig aktie-/fondkonto): no annual tax, kapitalvinstskatt on the gain
-    // is owed only when you actually withdraw.
-    const bucketGrowth = (nominal, mode) => {
-      const real = toReal(nominal);
-      return mode === 'isk' ? (1 + real) * (1 - ISK_TAX) - 1 : real;
-    };
+    const iskGrowth = (nominal, tax) => (1 + toReal(nominal)) * (1 - tax) - 1;
 
-    // "samlat kapital" (Generell balanserad portfölj) reuses the same rate as
-    // tab 1 — it's literally the same model, just also usable in tabs 2-4.
+    // "samlat kapital" (Blandportfölj) reuses the same rate and ISK tax as
+    // tab 1; it's literally the same model, just also usable in tabs 2-4.
+    // Only once you actually split into buckets does Aktier/fonder's own
+    // rate and tax come into play.
     const isSplit = document.querySelector('input[name="capitalMode"]:checked').value === 'split';
     const stocksNominal = isSplit ? +els['return-stocks'].value : +els.return.value;
-    stocksRate = bucketGrowth(stocksNominal / 100, taxModes.stocks);
-    bondsRate = bucketGrowth(+els['return-bonds'].value / 100, taxModes.bonds);
+    const stocksTax = isSplit ? STOCKS_TAX : BLEND_TAX;
+    stocksRate = iskGrowth(stocksNominal / 100, stocksTax);
+    bondsRate = iskGrowth(+els['return-bonds'].value / 100, BONDS_TAX);
 
     // sparkonto: ränta beskattas löpande varje år som inkomst av kapital, so
-    // unlike an AF-taxed bucket, the withdrawal itself is then tax-free. The
-    // tax hits the nominal interest earned that year, so it's applied before
-    // converting to a real rate — not after, unlike the ISK case above, whose
-    // small ~1% rate doesn't meaningfully distort things either way.
+    // unlike a schablonskatt-taxed bucket, the withdrawal itself is then
+    // tax-free. The tax hits the nominal interest earned that year, so it's
+    // applied before converting to a real rate — not after, unlike the ISK
+    // buckets above, whose small ~1% rate doesn't meaningfully distort
+    // things either way.
     const netNominalSavings = (+els['return-savings'].value / 100) * (1 - SAVINGS_TAX);
     savingsRate = toReal(netNominalSavings);
 
     growthRate = currentAllocation.stocks * stocksRate
       + currentAllocation.bonds * bondsRate
       + currentAllocation.savings * savingsRate;
-
-    // aktier/fonder is always ISK now, so only the räntor share ever owes
-    // anything at withdrawal time. This flat estimate is only ever used by the
-    // internal FIRE-age search below (findFireAge's per-candidate-age threshold
-    // check) — the actual decumulation shown to the user always goes through
-    // simulateBuckets(), which tracks the real cost basis year by year instead
-    // of assuming the whole withdrawal is taxable gain.
-    taxRate = currentAllocation.bonds * bondsTaxRate;
   }
 
   // "Ignorera pension" zeroes the amounts here rather than reading the sliders
@@ -303,17 +330,17 @@ function getParams() {
   // applied) if you flip the switch back on later.
   const countPension = document.querySelector('input[name="pensionMode"]:checked').value === 'count';
   const pensionStartAge = +els.pensionage.value;
-  const pensionTaxRate = 0.30; // fixed, not user-adjustable — pension is taxed as ordinary income
+  // each pension has its own user-adjustable rate now (Skatter) — allmän and
+  // tjänstepension are taxed as ordinary income, but not necessarily at the
+  // same marginal rate as each other.
   const pensions = [
-    { amount: countPension ? +els.pension1amount.value : 0, startAge: pensionStartAge, taxRate: pensionTaxRate },
-    { amount: countPension ? +els.pension2amount.value : 0, startAge: pensionStartAge, taxRate: pensionTaxRate },
+    { amount: countPension ? +els.pension1amount.value : 0, startAge: pensionStartAge, taxRate: +els['tax-pension1'].value / 100 },
+    { amount: countPension ? +els.pension2amount.value : 0, startAge: pensionStartAge, taxRate: +els['tax-pension2'].value / 100 },
   ];
 
   // 'preserve' (Bevara kapitalet): must end with at least the starting balance.
-  // 'target' (Eget målbelopp): must end with at least a fixed, chosen kr amount.
   // 'die' (Die With Zero): no floor at all beyond simply not running out early.
   const strategy = document.querySelector('input[name="strategy"]:checked').value;
-  const targetAmount = +els.targetAmount.value;
 
   return {
     growthRate,
@@ -321,21 +348,19 @@ function getParams() {
     // routed into the aktier/fonder bucket specifically while each bucket
     // still compounds at its own rate.
     stocksRate, bondsRate, savingsRate,
-    taxRate, taxModes, bondsTaxRate,
+    taxRate, // always 0 — every bucket is ISK, taxed annually above, never at withdrawal
     pensions,
     lifespan: +els.lifespan.value,
-    strategy, targetAmount,
+    strategy,
   };
 }
 
 // The end-of-horizon bar a simulation has to clear, given the chosen strategy.
 // `startBalance` is whatever balance is actually being tested (it varies
-// during a binary search), while `targetAmount` is a fixed, user-chosen kr
-// figure — the two strategies that use a floor need very different sources
-// for it, so this centralizes the choice for succeeds()/succeedsBuckets().
+// during a binary search) — "preserve" needs it as the floor,
+// "die" doesn't need a floor at all.
 function meetsEndGoal(finalBalance, startBalance, params) {
   if (params.strategy === 'preserve') return finalBalance >= startBalance;
-  if (params.strategy === 'target') return finalBalance >= params.targetAmount;
   return true; // 'die' — no floor beyond not running out early
 }
 
@@ -404,27 +429,15 @@ function solveMaxSpend(startBalance, startAge, params) {
 
 function bucketsTotal(b) { return b.stocks + b.bonds + b.savings; }
 
-// How much of a bucket's current value is actually unrealized gain, as opposed
-// to your own contributed capital — kapitalvinstskatt (AF's withdrawal tax)
-// only ever applies to the gain, never to money that's just your own capital
-// coming back out.
-function gainFraction(value, basis) {
-  if (value <= 0) return 0;
-  return Math.max(0, Math.min(1, (value - basis) / value));
-}
-
-// Bucket-aware decumulation: tracks stocks/bonds/savings — and, for whichever
-// of stocks/bonds is AF-taxed, its cost basis — through every single year of
-// withdrawal, so kapitalvinstskatt is only ever charged on gains as they're
-// actually realized that year (average-cost method), not as a one-time
-// estimate frozen at the moment retirement starts. That distinction matters a
-// lot over a long retirement: growth that happens *during* retirement is still
-// real gain, and still owes tax whenever it's eventually withdrawn — a frozen
-// snapshot would let all of that escape taxation for good.
-function simulateBuckets(startBuckets, basis, startAge, monthlySpend, params) {
-  const { stocksRate, bondsRate, savingsRate, taxModes, bondsTaxRate, pensions, lifespan } = params;
+// Bucket-aware decumulation: tracks stocks/bonds/savings separately through
+// every year of withdrawal, each compounding (and being drawn down) at its
+// own rate. There's no withdrawal-time tax to account for here — every
+// bucket is ISK or sparkonto, both already taxed annually above — so it's
+// just proportional drawdown-by-allocation, same philosophy the rest of the
+// tool uses elsewhere.
+function simulateBuckets(startBuckets, startAge, monthlySpend, params) {
+  const { stocksRate, bondsRate, savingsRate, pensions, lifespan } = params;
   let stocks = startBuckets.stocks, bonds = startBuckets.bonds, savings = startBuckets.savings;
-  let stocksBasis = basis.stocks, bondsBasis = basis.bonds;
   const path = [{ age: startAge, balance: stocks + bonds + savings }];
   let failedAtAge = null;
 
@@ -432,30 +445,17 @@ function simulateBuckets(startBuckets, basis, startAge, monthlySpend, params) {
     const pensionNet = pensionNetIncomeAt(age, pensions);
     const netGap = Math.max(0, monthlySpend - pensionNet);
     const total = stocks + bonds + savings;
-
-    // aktier/fonder is always ISK (already taxed annually above, so it never
-    // owes anything at withdrawal) — only räntor's AF share can, on its gain.
-    const bondsMarginalTaxRate = (taxModes && taxModes.bonds === 'af') ? bondsTaxRate * gainFraction(bonds, bondsBasis) : 0;
-    const blendedTaxRate = total > 0 ? (bonds / total) * bondsMarginalTaxRate : 0;
-
-    const grossMonthly = blendedTaxRate > 0 ? netGap / (1 - blendedTaxRate) : netGap;
-    const annualWithdrawal = grossMonthly * 12;
+    const annualWithdrawal = netGap * 12;
 
     if (annualWithdrawal > total) {
       if (failedAtAge === null) failedAtAge = age;
-      stocks = 0; bonds = 0; savings = 0; stocksBasis = 0; bondsBasis = 0;
+      stocks = 0; bonds = 0; savings = 0;
     } else if (total > 0) {
       // withdraw proportionally across all three, same blended-by-allocation
       // philosophy the rest of the tool uses elsewhere.
-      const wStocks = annualWithdrawal * (stocks / total);
-      const wBonds = annualWithdrawal * (bonds / total);
-      const wSavings = annualWithdrawal * (savings / total);
-      // average cost method: basis shrinks by the same fraction the value does.
-      stocksBasis *= stocks > 0 ? Math.max(0, (stocks - wStocks) / stocks) : 0;
-      bondsBasis *= bonds > 0 ? Math.max(0, (bonds - wBonds) / bonds) : 0;
-      stocks = Math.max(0, stocks - wStocks);
-      bonds = Math.max(0, bonds - wBonds);
-      savings = Math.max(0, savings - wSavings);
+      stocks = Math.max(0, stocks - annualWithdrawal * (stocks / total));
+      bonds = Math.max(0, bonds - annualWithdrawal * (bonds / total));
+      savings = Math.max(0, savings - annualWithdrawal * (savings / total));
     }
 
     stocks *= (1 + stocksRate);
@@ -467,8 +467,8 @@ function simulateBuckets(startBuckets, basis, startAge, monthlySpend, params) {
   return { path, failedAtAge };
 }
 
-function succeedsBuckets(startBuckets, basis, startAge, monthlySpend, params) {
-  const result = simulateBuckets(startBuckets, basis, startAge, monthlySpend, params);
+function succeedsBuckets(startBuckets, startAge, monthlySpend, params) {
+  const result = simulateBuckets(startBuckets, startAge, monthlySpend, params);
   if (result.failedAtAge !== null) return false;
   const startBalance = bucketsTotal(startBuckets);
   const finalBalance = result.path[result.path.length - 1].balance;
@@ -476,32 +476,30 @@ function succeedsBuckets(startBuckets, basis, startAge, monthlySpend, params) {
 }
 
 // Binary search for the max sustainable spend, scaling the given bucket mix
-// (and its AF cost basis) proportionally up/down while searching, so every
-// candidate keeps the same allocation shape as the real thing.
-function solveMaxSpendBuckets(startBuckets, basis, startAge, params) {
+// proportionally up/down while searching, so every candidate keeps the same
+// allocation shape as the real thing.
+function solveMaxSpendBuckets(startBuckets, startAge, params) {
   const total = bucketsTotal(startBuckets);
   let lo = 0, hi = total;
   for (let i = 0; i < 60; i++) {
     const mid = (lo + hi) / 2;
-    if (succeedsBuckets(startBuckets, basis, startAge, mid, params)) lo = mid; else hi = mid;
+    if (succeedsBuckets(startBuckets, startAge, mid, params)) lo = mid; else hi = mid;
   }
   return lo;
 }
 
 // Binary search for the minimum total capital — kept in the same bucket shape
-// as `buckets`, cost basis scaled the same way — that survives to lifespan.
-function solveRequiredBalanceBuckets(monthlySpend, startAge, buckets, basis, params) {
+// as `buckets` — that survives to lifespan.
+function solveRequiredBalanceBuckets(monthlySpend, startAge, buckets, params) {
   const total = bucketsTotal(buckets);
   if (total <= 0) return solveRequiredBalance(monthlySpend, startAge, params); // no shape to scale — fall back
   const shape = { stocks: buckets.stocks / total, bonds: buckets.bonds / total, savings: buckets.savings / total };
-  const basisRatio = { stocks: basis.stocks / total, bonds: basis.bonds / total };
 
   let lo = 0, hi = monthlySpend * 12 * 100;
   for (let i = 0; i < 60; i++) {
     const mid = (lo + hi) / 2;
     const scaledBuckets = { stocks: shape.stocks * mid, bonds: shape.bonds * mid, savings: shape.savings * mid };
-    const scaledBasis = { stocks: basisRatio.stocks * mid, bonds: basisRatio.bonds * mid };
-    if (succeedsBuckets(scaledBuckets, scaledBasis, startAge, monthlySpend, params)) hi = mid; else lo = mid;
+    if (succeedsBuckets(scaledBuckets, startAge, monthlySpend, params)) hi = mid; else lo = mid;
   }
   return hi;
 }
@@ -717,92 +715,78 @@ function recalculate() {
     caption = `för att kunna gå FIRE vid ${targetAge} års ålder, med en konsumtion på ${fmtMoney(spend)}/månad i dagens pengar.`;
     comparisonText = fmtMoney(spend * 12 / compareRate);
 
-  } else if (currentMode === 'when') {
+  } else if (currentMode === 'ready') {
+    // Three possible answers to "när är jag redo?": already ready today (no
+    // more saving needed at all), ready at some future age (given the
+    // savings rate below), or never within the chosen end age. The first
+    // check is a plain decumulation-from-today readiness check (independent
+    // of Månatligt sparande); the other two reuse the same forward search
+    // that used to live in a separate "När når jag FIRE?" tab.
     const startBuckets = computeStartBuckets();
     const monthlySavings = +els.savings.value;
     const spend = +els.spend.value;
-    const maxAge = params.lifespan;
-    const found = findFireAge(startBuckets, age, monthlySavings, spend, params, maxAge);
-
-    if (found) {
-      // continue the chart through retirement too, so the x-axis always spans
-      // all the way to the end age, same as every other mode.
-      const endBuckets = found.path[found.path.length - 1];
-      const yearsAccumulated = found.age - age;
-      const basis = { stocks: startBuckets.stocks + monthlySavings * 12 * yearsAccumulated, bonds: startBuckets.bonds };
-      const decum = simulateBuckets(endBuckets, basis, found.age, spend, params);
-      chartResult = { path: found.path.concat(decum.path.slice(1)), failedAtAge: decum.failedAtAge };
-      fireStartAge = found.age;
-      eyebrow = 'Du når FIRE om';
-      headline = `${found.age - age} år`;
-      caption = `vid ${found.age} års ålder, med ${fmtMoney(monthlySavings)}/månad i sparande utöver ditt nuvarande kapital, och en konsumtion på ${fmtMoney(spend)}/månad i dagens pengar.`;
-    } else {
-      chartResult = { path: accumulate(startBuckets, age, monthlySavings, params, maxAge), failedAtAge: null };
-      fireStartAge = null;
-      eyebrow = 'Med nuvarande sparande';
-      headline = 'Räcker inte';
-      caption = `inom de kommande ${maxAge - age} åren (till ${maxAge} års ålder), med ${fmtMoney(monthlySavings)}/månad i sparande och en konsumtion på ${fmtMoney(spend)}/månad.`;
-    }
-
-    // compare against a flat withdrawal-rule target (spend / rate) instead of
-    // the age-dependent required balance this mode otherwise solves for.
-    const compareTarget = spend * 12 / compareRate;
-    const comparePath = accumulate(startBuckets, age, monthlySavings, params, maxAge);
-    const comparePoint = comparePath.find(p => p.balance >= compareTarget);
-    comparisonText = comparePoint ? `${comparePoint.age - age} år` : 'Räcker inte';
-
-  } else if (currentMode === 'status') {
-    const startBuckets = computeStartBuckets();
-    const spend = +els.spend.value;
     const balance = bucketsTotal(startBuckets);
-    const basis = { stocks: startBuckets.stocks, bonds: startBuckets.bonds };
+    const maxAge = params.lifespan;
 
-    const result = simulateBuckets(startBuckets, basis, age, spend, params);
-    const finalBalance = result.path[result.path.length - 1].balance;
-    const ranOut = result.failedAtAge !== null;
-    const goalOk = meetsEndGoal(finalBalance, balance, params);
-    const ready = !ranOut && goalOk;
-    fireStartAge = age;
+    const nowResult = simulateBuckets(startBuckets, age, spend, params);
+    const nowFinalBalance = nowResult.path[nowResult.path.length - 1].balance;
+    const readyNow = nowResult.failedAtAge === null && meetsEndGoal(nowFinalBalance, balance, params);
 
-    chartResult = result;
-
-    if (ready) {
+    if (readyNow) {
+      chartResult = nowResult;
+      fireStartAge = age;
       eyebrow = 'Du är redo';
-      headline = 'Ja.';
-      caption = params.strategy === 'target'
-        ? `Vid ${age} års ålder räcker kapitalet hela vägen till ${params.lifespan} år, med minst ${fmtMoney(params.targetAmount)} kvar då, och en konsumtion på ${fmtMoney(spend)}/månad.`
-        : `Vid ${age} års ålder räcker kapitalet hela vägen till ${params.lifespan} år med en konsumtion på ${fmtMoney(spend)}/månad.`;
+      headline = 'Nu.';
+      caption = `Redan idag räcker kapitalet hela vägen till ${params.lifespan} år, med en konsumtion på ${fmtMoney(spend)}/månad.`;
     } else {
-      const required = solveRequiredBalanceBuckets(spend, age, startBuckets, basis, params);
-      const shortfall = fmtMoney(required - balance);
-      headline = 'Nej.';
-      if (ranOut) {
-        eyebrow = 'Inte riktigt än';
-        caption = `Du behöver ${shortfall} till. Med det kapitalet tar pengarna slut vid ${result.failedAtAge} års ålder, som grafen visar.`;
-      } else if (params.strategy === 'target') {
-        eyebrow = 'Nästan — men du når inte ditt målbelopp';
-        caption = `Du behöver ${shortfall} till för att ha ${fmtMoney(params.targetAmount)} kvar vid ${params.lifespan} års ålder. Grafen visar kapitalets utveckling — vid ${params.lifespan} år har du bara ${fmtMoney(finalBalance)} kvar.`;
+      const found = findFireAge(startBuckets, age, monthlySavings, spend, params, maxAge);
+
+      if (found) {
+        // continue the chart through retirement too, so the x-axis always
+        // spans all the way to the end age, same as every other mode.
+        const endBuckets = found.path[found.path.length - 1];
+        const decum = simulateBuckets(endBuckets, found.age, spend, params);
+        chartResult = { path: found.path.concat(decum.path.slice(1)), failedAtAge: decum.failedAtAge };
+        fireStartAge = found.age;
+        eyebrow = 'Du blir redo';
+        headline = `Om ${found.age - age} år`;
+        // how much more capital you'd need right now to be ready today —
+        // the actual bucket-aware required balance at your current age,
+        // same shape as your real capital, not the flat estimate
+        // findFireAge uses internally for its own search. Kept short (same
+        // ballpark as the other two captions) so it never wraps past two
+        // lines — just the shortfall and the age it resolves at.
+        const requiredNow = solveRequiredBalanceBuckets(spend, age, startBuckets, params);
+        const missingNow = Math.max(0, requiredNow - balance);
+        caption = `Du saknar ${fmtMoney(missingNow)} idag — med ${fmtMoney(monthlySavings)}/månad i sparande når du dit vid ${found.age} års ålder.`;
       } else {
-        eyebrow = 'Nästan — men du äter av kapitalet';
-        caption = `Du behöver ${shortfall} till för att aldrig äta av grundplåten. Grafen visar hur kapitalet äts upp — vid ${params.lifespan} år har du bara ${fmtMoney(finalBalance)} kvar.`;
+        chartResult = { path: accumulate(startBuckets, age, monthlySavings, params, maxAge), failedAtAge: null };
+        fireStartAge = null;
+        eyebrow = 'Blir aldrig redo';
+        headline = 'Aldrig.';
+        caption = `inte inom de kommande ${maxAge - age} åren (till ${maxAge} års ålder), med ${fmtMoney(monthlySavings)}/månad i sparande och en konsumtion på ${fmtMoney(spend)}/månad.`;
       }
     }
 
-    {
-      const compareRequired = spend * 12 / compareRate;
-      comparisonText = balance >= compareRequired
-        ? 'Ja.'
-        : `Nej. Du behöver ${fmtMoney(compareRequired - balance)} till.`;
+    // same three-way answer, against a flat withdrawal-rule threshold
+    // (spend / rate) instead of the model's own required-balance/readiness
+    // check above.
+    const compareRequired = spend * 12 / compareRate;
+    if (balance >= compareRequired) {
+      comparisonText = 'Nu.';
+    } else {
+      const comparePath = accumulate(startBuckets, age, monthlySavings, params, maxAge);
+      const comparePoint = comparePath.find(p => p.balance >= compareRequired);
+      comparisonText = comparePoint ? `Om ${comparePoint.age - age} år` : 'Aldrig.';
     }
 
   } else {
     // 'withdraw'
     const startBuckets = computeStartBuckets();
     const balance = bucketsTotal(startBuckets);
-    const basis = { stocks: startBuckets.stocks, bonds: startBuckets.bonds };
 
-    const maxSpend = solveMaxSpendBuckets(startBuckets, basis, age, params);
-    const decum = simulateBuckets(startBuckets, basis, age, maxSpend, params);
+    const maxSpend = solveMaxSpendBuckets(startBuckets, age, params);
+    const decum = simulateBuckets(startBuckets, age, maxSpend, params);
     chartResult = decum;
     fireStartAge = age;
 
