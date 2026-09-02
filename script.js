@@ -78,8 +78,8 @@ function updateReturnVisibility() {
   // always visible, on either side of the switch — just what it explains
   // changes. Blandportfölj only ever describes the assumed asset mix (its
   // tax rate is explained under its own slider in Skatter instead); once you
-  // finjustera, the bucket cards below speak for themselves, so this points
-  // there rather than repeating each one's own explanation.
+  // switch to Egen fördelning, the bucket cards below speak for themselves,
+  // so this points there rather than repeating each one's own explanation.
   const capitalModeHint = document.getElementById('capital-mode-hint');
   capitalModeHint.textContent = isSplit
     ? 'Du delar själv upp kapitalet i Aktie/fondportfölj, Ränteportfölj och Sparkonto nedan, med egen avkastning och skatt för var och en.'
@@ -205,6 +205,15 @@ function updateAllocationDisplay() {
   els['out-alloc-savings-kr'].textContent = fmtNumber(totalCapital * savings / 100);
 
   currentAllocation = { stocks: stocks / total, bonds: bonds / total, savings: savings / total };
+
+  // "Blandad avkastning" — the single nominal rate your custom split works
+  // out to overall, weighted by each bucket's own share, so you can compare
+  // it at a glance to the plain Blandportfölj rate above.
+  const blendedReturn = (stocks * (+els['return-stocks'].value)
+    + bonds * (+els['return-bonds'].value)
+    + savings * (+els['return-savings'].value)) / total;
+  document.getElementById('blended-return-hint').textContent =
+    `Blandad avkastning: ${blendedReturn.toFixed(1).replace('.', ',')} % nominellt, givet din fördelning ovan.`;
 }
 
 // The one "Totalt kapital" slider, split across the three buckets by their
@@ -258,9 +267,9 @@ function syncDisplays() {
   els['out-pension1amount'].textContent = fmtNumber(+els.pension1amount.value);
   els['out-pension2amount'].textContent = fmtNumber(+els.pension2amount.value);
   els['out-pensionage'].textContent = els.pensionage.value;
-  els['out-tax-isk-blend'].textContent = els['tax-isk-blend'].value;
-  els['out-tax-isk-stocks'].textContent = els['tax-isk-stocks'].value;
-  els['out-tax-bonds'].textContent = els['tax-bonds'].value;
+  els['out-tax-isk-blend'].textContent = els['tax-isk-blend'].value.replace('.', ',');
+  els['out-tax-isk-stocks'].textContent = els['tax-isk-stocks'].value.replace('.', ',');
+  els['out-tax-bonds'].textContent = els['tax-bonds'].value.replace('.', ',');
   els['out-tax-savings'].textContent = els['tax-savings'].value;
   els['out-tax-pension1'].textContent = els['tax-pension1'].value;
   els['out-tax-pension2'].textContent = els['tax-pension2'].value;
@@ -290,7 +299,7 @@ function getParams() {
 
   // The simplified 100%-aktier model (tab 1, no buckets) always uses the
   // Blandportfölj rate — never the Aktier/fonder bucket rate, even if
-  // "Finjustera portfölj" happens to be selected.
+  // "Egen fördelning" happens to be selected.
   const simpleReal = (1 + toReal(+els.return.value / 100)) * (1 - BLEND_TAX) - 1;
 
   let growthRate = simpleReal;
@@ -429,15 +438,33 @@ function solveMaxSpend(startBalance, startAge, params) {
 
 function bucketsTotal(b) { return b.stocks + b.bonds + b.savings; }
 
+// The target split to rebalance back to every year, derived from whatever
+// shape `buckets` itself started at — so "your chosen split" stays exactly
+// that for the entire horizon, instead of silently drifting toward whichever
+// bucket happens to compound fastest. Falls back to 100% aktier/fonder if
+// there's no capital yet to derive a shape from (e.g. building up purely
+// from monthly savings starting at zero) — same as the rest of the tool
+// treats an empty portfolio elsewhere.
+function bucketShape(buckets) {
+  const total = bucketsTotal(buckets);
+  return total > 0
+    ? { stocks: buckets.stocks / total, bonds: buckets.bonds / total, savings: buckets.savings / total }
+    : { stocks: 1, bonds: 0, savings: 0 };
+}
+
 // Bucket-aware decumulation: tracks stocks/bonds/savings separately through
 // every year of withdrawal, each compounding (and being drawn down) at its
-// own rate. There's no withdrawal-time tax to account for here — every
-// bucket is ISK or sparkonto, both already taxed annually above — so it's
-// just proportional drawdown-by-allocation, same philosophy the rest of the
-// tool uses elsewhere.
+// own rate, then rebalanced back to the original split at the end of the
+// year — the same discipline an investor doing an annual rebalance would
+// follow, so a bucket that outran the others doesn't quietly take over the
+// whole portfolio over a multi-decade horizon. There's no withdrawal-time
+// tax to account for here — every bucket is ISK or sparkonto, both already
+// taxed annually above — so it's just proportional drawdown-by-allocation,
+// same philosophy the rest of the tool uses elsewhere.
 function simulateBuckets(startBuckets, startAge, monthlySpend, params) {
   const { stocksRate, bondsRate, savingsRate, pensions, lifespan } = params;
   let stocks = startBuckets.stocks, bonds = startBuckets.bonds, savings = startBuckets.savings;
+  const shape = bucketShape(startBuckets);
   const path = [{ age: startAge, balance: stocks + bonds + savings }];
   let failedAtAge = null;
 
@@ -461,6 +488,13 @@ function simulateBuckets(startBuckets, startAge, monthlySpend, params) {
     stocks *= (1 + stocksRate);
     bonds *= (1 + bondsRate);
     savings *= (1 + savingsRate);
+
+    // annual rebalance back to the target split.
+    const rebalanced = stocks + bonds + savings;
+    stocks = rebalanced * shape.stocks;
+    bonds = rebalanced * shape.bonds;
+    savings = rebalanced * shape.savings;
+
     path.push({ age: age + 1, balance: Math.max(0, stocks + bonds + savings) });
   }
 
@@ -513,20 +547,31 @@ function capitalAtAge(path, age) {
 }
 
 // Simulates the accumulation phase with the three buckets tracked separately —
-// each compounds at its own rate, and the monthly savings contribution is added
-// to the aktier/fonder bucket only (not spread across all three). Returns a path
-// of { age, balance, stocks, bonds, savings } — every consumer that only looks
-// at .balance (= sum of the three) is unaffected; simulateBuckets() below uses
-// the per-bucket breakdown to know each bucket's actual value once decumulation
-// starts.
+// each compounds at its own rate, the monthly savings contribution is added
+// to the aktier/fonder bucket, and then the whole thing is rebalanced back to
+// the original split at the end of the year (same as simulateBuckets() does
+// during decumulation) — so new savings landing in one bucket, and buckets
+// compounding at different rates, don't quietly shift your actual allocation
+// away from the split you chose. Returns a path of { age, balance, stocks,
+// bonds, savings } — every consumer that only looks at .balance (= sum of the
+// three) is unaffected; simulateBuckets() below uses the per-bucket
+// breakdown to know each bucket's actual value once decumulation starts.
 function accumulate(startBuckets, startAge, monthlySavings, params, maxAge) {
   let { stocks, bonds, savings } = startBuckets;
+  const shape = bucketShape(startBuckets);
   const path = [{ age: startAge, balance: stocks + bonds + savings, stocks, bonds, savings }];
   for (let age = startAge; age < maxAge; age++) {
     stocks += monthlySavings * 12;
     stocks *= (1 + params.stocksRate);
     bonds *= (1 + params.bondsRate);
     savings *= (1 + params.savingsRate);
+
+    // annual rebalance back to the target split.
+    const total = stocks + bonds + savings;
+    stocks = total * shape.stocks;
+    bonds = total * shape.bonds;
+    savings = total * shape.savings;
+
     path.push({ age: age + 1, balance: stocks + bonds + savings, stocks, bonds, savings });
   }
   return path;

@@ -105,7 +105,7 @@
         </label>
         <label class="strategy-toggle__option">
           <input type="radio" name="capitalMode" id="capital-split" value="split">
-          <span>Finjustera portfölj</span>
+          <span>Egen fördelning</span>
         </label>
       </div>
       <p class="field-hint" id="capital-mode-hint">Förutsätter en generell balanserad portfölj med 60–70 % aktier och 30–40 % räntor — ett enkelt standardantagande som passar de flesta.</p>
@@ -137,6 +137,7 @@
           </label>
           <p class="field-hint">Motsvarar <output id="out-alloc-savings-kr">0</output> kr.</p>
         </div>
+        <p class="field-hint" id="blended-return-hint">Blandad avkastning: 6,9 % nominellt, givet din fördelning ovan.</p>
       </div>
     </div>
 
@@ -150,7 +151,7 @@
         </label>
         <label class="strategy-toggle__option">
           <input type="radio" name="pensionMode" id="pension-count" value="count">
-          <span>Räkna med pension</span>
+          <span>Räkna in pension</span>
         </label>
       </div>
       <p class="field-hint" id="pension-hint">Beräkningen bygger enbart på ditt eget sparande — ingen pension räknas in, även om du faktiskt har rätt till det.</p>
@@ -241,20 +242,20 @@
       <div class="field-group__content" id="tax-content" hidden>
         <label class="field">
           <span class="field__label">Skatt på Blandportfölj (utgår från ISK)</span>
-          <span class="field__value"><output id="out-tax-isk-blend">1</output> %</span>
-          <input type="range" id="tax-isk-blend" min="0" max="3" value="1" step="0.1">
+          <span class="field__value"><output id="out-tax-isk-blend">1,1</output> %</span>
+          <input type="range" id="tax-isk-blend" min="0" max="3" value="1.1" step="0.1">
         </label>
 
         <label class="field">
           <span class="field__label">Skatt på Aktie/fondportfölj (utgår från ISK)</span>
-          <span class="field__value"><output id="out-tax-isk-stocks">1</output> %</span>
-          <input type="range" id="tax-isk-stocks" min="0" max="3" value="1" step="0.1">
+          <span class="field__value"><output id="out-tax-isk-stocks">1,1</output> %</span>
+          <input type="range" id="tax-isk-stocks" min="0" max="3" value="1.1" step="0.1">
         </label>
 
         <label class="field">
           <span class="field__label">Skatt på Ränteportfölj (utgår från ISK)</span>
-          <span class="field__value"><output id="out-tax-bonds">1</output> %</span>
-          <input type="range" id="tax-bonds" min="0" max="3" value="1" step="0.1">
+          <span class="field__value"><output id="out-tax-bonds">1,1</output> %</span>
+          <input type="range" id="tax-bonds" min="0" max="3" value="1.1" step="0.1">
         </label>
 
         <label class="field">
@@ -271,8 +272,8 @@
 
         <label class="field">
           <span class="field__label">Skatt på Tjänstepension</span>
-          <span class="field__value"><output id="out-tax-pension2">30</output> %</span>
-          <input type="range" id="tax-pension2" min="0" max="60" value="30" step="1">
+          <span class="field__value"><output id="out-tax-pension2">32</output> %</span>
+          <input type="range" id="tax-pension2" min="0" max="60" value="32" step="1">
         </label>
       </div>
     </div>
