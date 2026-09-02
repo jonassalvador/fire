@@ -83,7 +83,7 @@ function updateReturnVisibility() {
   const capitalModeHint = document.getElementById('capital-mode-hint');
   capitalModeHint.textContent = isSplit
     ? 'Du delar själv upp kapitalet i Aktie/fondportfölj, Ränteportfölj och Sparkonto nedan, med egen avkastning och skatt för var och en.'
-    : 'Förutsätter en generell balanserad portfölj med 60–70 % aktier och 30–40 % räntor — ett enkelt standardantagande som passar de flesta.';
+    : `Förutsätter en generell blandportfölj med 60–70 % aktier, 30–40 % räntor, och ${els.return.value} % förväntad avkastning nominellt.`;
 }
 
 document.querySelectorAll('input[name="capitalMode"]').forEach(radio => {

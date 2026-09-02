@@ -60,7 +60,7 @@
         <span class="field__value"><output id="out-spend">25 000</output> <span class="unit"></span></span>
         <input type="range" id="spend" min="5000" max="150000" value="25000" step="1000">
       </label>
-      <p class="field-hint" id="spend-hint">Regular FIRE — Den klassiska FIRE-nivån. Motsvarar en genomsnittlig svensk nettoinkomst. Du lever ett normalt, bra liv utan ekonomisk stress.</p>
+      <p class="field-hint" id="spend-hint" data-modes="need ready">Regular FIRE — Den klassiska FIRE-nivån. Motsvarar en genomsnittlig svensk nettoinkomst. Du lever ett normalt, bra liv utan ekonomisk stress.</p>
 
       <div class="strategy-toggle">
         <label class="strategy-toggle__option">
@@ -108,34 +108,34 @@
           <span>Egen fördelning</span>
         </label>
       </div>
-      <p class="field-hint" id="capital-mode-hint">Förutsätter en generell balanserad portfölj med 60–70 % aktier och 30–40 % räntor — ett enkelt standardantagande som passar de flesta.</p>
+      <p class="field-hint" id="capital-mode-hint">Förutsätter en generell blandportfölj med 60–70 % aktier, 30–40 % räntor, och 7 % förväntad avkastning nominellt.</p>
 
       <div id="capital-split-fields" hidden>
         <div class="asset-card">
           <label class="field">
             <span class="field__label">Aktie/fondportfölj</span>
-            <span class="field__value"><output id="out-alloc-stocks">65</output> %</span>
-            <input type="range" id="alloc-stocks" min="0" max="100" value="65" step="1">
+            <span class="field__value"><output id="out-alloc-stocks">70</output> %</span>
+            <input type="range" id="alloc-stocks" min="0" max="100" value="70" step="1">
           </label>
-          <p class="field-hint">Motsvarar <output id="out-alloc-stocks-kr">3 250 000</output> kr.</p>
+          <p class="field-hint">Motsvarar <output id="out-alloc-stocks-kr">3 500 000</output> kr.</p>
         </div>
 
         <div class="asset-card">
           <label class="field">
             <span class="field__label">Ränteportfölj</span>
-            <span class="field__value"><output id="out-alloc-bonds">35</output> %</span>
-            <input type="range" id="alloc-bonds" min="0" max="100" value="35" step="1">
+            <span class="field__value"><output id="out-alloc-bonds">15</output> %</span>
+            <input type="range" id="alloc-bonds" min="0" max="100" value="15" step="1">
           </label>
-          <p class="field-hint">Motsvarar <output id="out-alloc-bonds-kr">1 750 000</output> kr.</p>
+          <p class="field-hint">Motsvarar <output id="out-alloc-bonds-kr">750 000</output> kr.</p>
         </div>
 
         <div class="asset-card">
           <label class="field">
             <span class="field__label">Sparkonto</span>
-            <span class="field__value"><output id="out-alloc-savings">0</output> %</span>
-            <input type="range" id="alloc-savings" min="0" max="100" value="0" step="1">
+            <span class="field__value"><output id="out-alloc-savings">15</output> %</span>
+            <input type="range" id="alloc-savings" min="0" max="100" value="15" step="1">
           </label>
-          <p class="field-hint">Motsvarar <output id="out-alloc-savings-kr">0</output> kr.</p>
+          <p class="field-hint">Motsvarar <output id="out-alloc-savings-kr">750 000</output> kr.</p>
         </div>
         <p class="field-hint" id="blended-return-hint">Blandad avkastning: 6,9 % nominellt, givet din fördelning ovan.</p>
       </div>
