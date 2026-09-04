@@ -76,9 +76,11 @@ function updateReturnVisibility() {
   const isSplit = document.querySelector('input[name="capitalMode"]:checked').value === 'split';
   capitalSplitFields.hidden = !isSplit;
 
+  // lengths matched (verified same line count on mobile and desktop) so
+  // toggling the radio doesn't change this hint's height.
   const capitalModeHint = document.getElementById('capital-mode-hint');
   capitalModeHint.textContent = isSplit
-    ? 'Du delar själv upp kapitalet i Aktier/fonder, Räntor och Sparkonto nedan, med egen avkastning och skatt för var och en.'
+    ? 'Du delar upp kapitalet i Aktier/fonder, Räntor och Sparkonto, med egen avkastning och skatt.'
     : `Förutsätter en generell blandportfölj med 60–70 % aktier, 30–40 % räntor, och ${els.return.value} % förväntad avkastning nominellt.`;
 }
 
@@ -274,15 +276,19 @@ function computeStartBuckets() {
 // doesn't feed into any calculation. Ranges are inclusive of their lower bound;
 // the top bucket also covers anything above 150 000 kr should the slider's
 // max ever change.
+// Description lengths are deliberately matched to each other (verified to
+// render as the same number of lines on both mobile and desktop widths) —
+// otherwise dragging "Önskad månadskonsumtion" across a level boundary
+// changes this hint's height and pushes the rest of the form up or down.
 const FIRE_LEVELS = [
-  { min: 5000, name: 'Barista FIRE', desc: 'Portföljen täcker en liten bas, men du måste fortfarande jobba deltid eller ha en sidoinkomst för att klara dig.' },
-  { min: 10000, name: 'Lean FIRE', desc: 'Du är helt fri men lever extremt minimalistiskt. Täcker endast mat, billigt boende och absoluta måsten.' },
-  { min: 15000, name: 'Slender FIRE', desc: 'Steget mellan fattig och lagom. Du har råd med lite rörliga utgifter men måste fortfarande budgetera strikt.' },
-  { min: 20000, name: 'Regular FIRE', desc: 'Den klassiska FIRE-nivån. Motsvarar en genomsnittlig svensk nettoinkomst. Du lever ett normalt, bra liv utan ekonomisk stress.' },
-  { min: 30000, name: 'Chubby FIRE', desc: 'Det välbärgade gränslandet. Du har en guldkant på tillvaron med utrymme för resor, restauranger och extra bekvämligheter.' },
-  { min: 40000, name: 'Fat FIRE', desc: 'Ren lyxnivå i Sverige. Du kan bo dyrt, resa i business class och köpa kvalitetsprodukter utan att titta på prislappen.' },
-  { min: 60000, name: 'Obese FIRE', desc: 'Extremt hög levnadsstandard. Ekonomin begränsar dig inte på något realistiskt sätt i vardagen.' },
-  { min: 100000, name: 'Whale FIRE', desc: 'Ekonomiskt oberoende på generationsnivå, i samma sfär som höginkomsttagare och mångmiljonärer.' },
+  { min: 5000, name: 'Barista FIRE', desc: 'Portföljen täcker en liten bas — du behöver fortfarande jobba deltid för att klara dig.' },
+  { min: 10000, name: 'Lean FIRE', desc: 'Du är helt fri men lever extremt minimalistiskt — bara mat, boende och absoluta måsten.' },
+  { min: 15000, name: 'Slender FIRE', desc: 'Steget mellan fattig och lagom — visst utrymme för rörliga utgifter, men budgetera strikt.' },
+  { min: 20000, name: 'Regular FIRE', desc: 'Motsvarar en genomsnittlig svensk nettoinkomst, utan ekonomisk stress.' },
+  { min: 30000, name: 'Chubby FIRE', desc: 'Det välbärgade gränslandet — guldkant på tillvaron med utrymme för resor och restauranger.' },
+  { min: 40000, name: 'Fat FIRE', desc: 'Ren lyxnivå i Sverige — bo dyrt, res i business class, och köp utan att titta på prislappen.' },
+  { min: 60000, name: 'Obese FIRE', desc: 'Extremt hög levnadsstandard — ekonomin begränsar dig inte på något realistiskt sätt.' },
+  { min: 100000, name: 'Whale FIRE', desc: 'Ekonomiskt oberoende på generationsnivå, i klass med höginkomsttagare och mångmiljonärer.' },
 ];
 
 function fireLevelFor(spend) {
