@@ -517,7 +517,14 @@ function simulateBuckets(startBuckets, startAge, monthlySpend, params) {
   let failedAtAge = null;
 
   for (let age = startAge; age < lifespan; age++) {
-    const yearEnd = age + 1;
+    // when startAge is fractional (a "blir redo" crossing rather than a
+    // whole slider year), stepping by whole years from it can overshoot
+    // lifespan by up to just under a year — clip the final iteration's own
+    // "year" to end exactly at lifespan instead, so its balance is computed
+    // over the true (shorter) remaining duration rather than a full year
+    // that then gets its age label chopped back without reworking the
+    // number itself, which used to read as a small kink right at the end.
+    const yearEnd = Math.min(age + 1, lifespan);
     // split this year at any pension birthday strictly inside it — the
     // simulation's own starting age can be a fractional "blir redo"
     // crossing, so a birthday can land mid-step instead of exactly on a
@@ -559,20 +566,14 @@ function simulateBuckets(startBuckets, startAge, monthlySpend, params) {
       if (subEnd !== yearEnd) path.push({ age: subEnd, balance: stocks + bonds + savings });
     }
 
-    // annual rebalance back to the target %-split — once per full year, at
-    // the end, same as always (not per sub-period).
+    // annual rebalance back to the target %-split — once per full year (or
+    // once at the very end of a final, clipped partial year), same as
+    // always (not per sub-period).
     const rebalanced = stocks + bonds + savings;
     ({ stocks, bonds, savings } = rebalance(rebalanced));
 
-    path.push({ age: age + 1, balance: Math.max(0, stocks + bonds + savings) });
+    path.push({ age: yearEnd, balance: Math.max(0, stocks + bonds + savings) });
   }
-
-  // when startAge is fractional (a "blir redo" crossing rather than a whole
-  // slider year), stepping by whole years from it can overshoot lifespan by
-  // up to just under a year — clamp the final point back to exactly
-  // lifespan so it reads as "90 år", not "90.8 år" rounded up to 91.
-  const last = path[path.length - 1];
-  if (last.age > lifespan) last.age = lifespan;
 
   return { path, failedAtAge };
 }
