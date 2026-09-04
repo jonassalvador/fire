@@ -532,8 +532,19 @@ function simulateBuckets(startBuckets, startAge, monthlySpend, params) {
     // for the sub-period after, each compounding only over its own
     // (fractional) share of the year — averaging the whole year at one
     // blended rate instead reads as a small kink right at the birthday.
-    const splitAges = [...new Set(pensions.map(p => p.startAge).filter(a => a > age && a < yearEnd))];
-    const bounds = [age, ...splitAges, yearEnd].sort((a, b) => a - b);
+    // a birthday falls inside any *given* year at most once across the whole
+    // horizon per pension, so most years have no split at all — building a
+    // Set and sorting on every single year regardless was pure overhead in
+    // the (overwhelmingly common) unsplit case, in what's the hottest inner
+    // loop in the app (called by solveRequiredBalanceBuckets()'s own binary
+    // search, itself called dozens of times per recalculate() in "ready"
+    // mode). `pensions` only ever has a couple of entries, so a plain
+    // include-check dedupes just as correctly without that overhead.
+    let splitAges = [];
+    for (const p of pensions) {
+      if (p.startAge > age && p.startAge < yearEnd && !splitAges.includes(p.startAge)) splitAges.push(p.startAge);
+    }
+    const bounds = splitAges.length ? [age, ...splitAges.sort((a, b) => a - b), yearEnd] : [age, yearEnd];
 
     for (let s = 0; s < bounds.length - 1; s++) {
       const subStart = bounds[s], subYears = bounds[s + 1] - bounds[s];
@@ -600,8 +611,14 @@ function solveMaxSpendBuckets(startBuckets, startAge, params) {
 }
 
 // Binary search for the minimum total capital — kept in the same bucket shape
-// as `buckets` — that survives to lifespan.
-function solveRequiredBalanceBuckets(monthlySpend, startAge, buckets, params) {
+// as `buckets` — that survives to lifespan. `iterations` defaults to full
+// (kr-exact) precision; findFireAge() passes a lower one for the many
+// intermediate sign-checks along its own outer bisection, where only the
+// direction of the gap matters, not its exact value — that outer bisection
+// re-halves the age range 30 times regardless, so it self-corrects for the
+// inner solve's coarser precision on every one of those intermediate calls,
+// converging to the same fractional age either way.
+function solveRequiredBalanceBuckets(monthlySpend, startAge, buckets, params, iterations = 60) {
   // bucketShape() already handles an empty (all-zero) `buckets` the same way
   // accumulate()/simulateBuckets() do (100% Aktier/fonder) — using that same
   // fallback here, instead of a separate flat-rate one, keeps "what you'd
@@ -610,7 +627,7 @@ function solveRequiredBalanceBuckets(monthlySpend, startAge, buckets, params) {
   const shape = bucketShape(buckets);
 
   let lo = 0, hi = monthlySpend * 12 * 100;
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < iterations; i++) {
     const mid = (lo + hi) / 2;
     const scaledBuckets = { stocks: shape.stocks * mid, bonds: shape.bonds * mid, savings: shape.savings * mid };
     if (succeedsBuckets(scaledBuckets, startAge, monthlySpend, params)) hi = mid; else lo = mid;
@@ -690,9 +707,13 @@ function findFireAge(startBuckets, startAge, monthlySavings, monthlySpend, param
   const lastCandidate = accPath.length - 2;
   if (lastCandidate < 1) return null;
 
+  // 30 iterations already gives sub-kr precision on a range this size — this
+  // only ever feeds a boolean (is this year ready, yes/no), so there's
+  // nothing to gain from the default's full 60, only more calls to pay for
+  // in what's by far the hottest path in "ready" mode.
   const isReady = i => {
     const point = accPath[i];
-    const required = solveRequiredBalanceBuckets(monthlySpend, point.age, point, params);
+    const required = solveRequiredBalanceBuckets(monthlySpend, point.age, point, params, 30);
     return point.balance >= required;
   };
 
@@ -753,7 +774,11 @@ function findFireAge(startBuckets, startAge, monthlySavings, monthlySpend, param
     const bal = capitalAt(age);
     return { age, balance: bal, stocks: shape.stocks * bal, bonds: shape.bonds * bal, savings: shape.savings * bal };
   };
-  const gapAt = age => capitalAt(age) - solveRequiredBalanceBuckets(monthlySpend, age, bucketsAt(age), params);
+  // same reasoning as isReady() above — this only feeds the sign check the
+  // outer 30-step bisection below uses to pick a direction, and that outer
+  // bisection re-halves the age range regardless, so it converges to the
+  // same fractional age either way.
+  const gapAt = age => capitalAt(age) - solveRequiredBalanceBuckets(monthlySpend, age, bucketsAt(age), params, 30);
 
   let loAge = prevPoint.age, hiAge = point.age;
   for (let iter = 0; iter < 30; iter++) {
@@ -986,7 +1011,10 @@ function recalculate() {
         // findFireAge uses internally for its own search. Kept short (same
         // ballpark as the other two captions) so it never wraps past two
         // lines — just the shortfall and the age it resolves at.
-        const requiredNow = solveRequiredBalanceBuckets(spend, age, startBuckets, params);
+        // shown rounded to whole kr, so the default's full 60-iteration
+        // precision (sub-öre) buys nothing here either — see findFireAge()'s
+        // isReady()/gapAt() for the same reasoning.
+        const requiredNow = solveRequiredBalanceBuckets(spend, age, startBuckets, params, 30);
         const missingNow = Math.max(0, requiredNow - balance);
         caption = `Du saknar ${fmtMoney(missingNow)} idag — med ${fmtMoney(monthlySavings)}/månad i sparande når du dit vid ${found.age} års ålder.`;
       } else {
