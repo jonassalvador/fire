@@ -69,20 +69,16 @@ function updateVisibility() {
 const capitalSplitFields = document.getElementById('capital-split-fields');
 
 function updateReturnVisibility() {
-  // Tillgångar still only shows the three hinkar once you actually split —
-  // Tillväxt & inflation and Skatter, by contrast, always show every slider
-  // regardless of split/combined, pension on/off, or anything else.
+  // Blandportfölj shows nothing extra here at all — it just reuses the plain
+  // "Förväntad nominell avkastning: Blandportfölj" slider down in Avkastning,
+  // same rate tab 1 uses. Egen fördelning always shows the same three
+  // %-sliders, rebalanced back to that split every year.
   const isSplit = document.querySelector('input[name="capitalMode"]:checked').value === 'split';
   capitalSplitFields.hidden = !isSplit;
 
-  // always visible, on either side of the switch — just what it explains
-  // changes. Blandportfölj only ever describes the assumed asset mix (its
-  // tax rate is explained under its own slider in Skatter instead); once you
-  // switch to Egen fördelning, the bucket cards below speak for themselves,
-  // so this points there rather than repeating each one's own explanation.
   const capitalModeHint = document.getElementById('capital-mode-hint');
   capitalModeHint.textContent = isSplit
-    ? 'Du delar själv upp kapitalet i Aktie/fondportfölj, Ränteportfölj och Sparkonto nedan, med egen avkastning och skatt för var och en.'
+    ? 'Du delar själv upp kapitalet i Aktier/fonder, Räntor och Sparkonto nedan, med egen avkastning och skatt för var och en.'
     : `Förutsätter en generell blandportfölj med 60–70 % aktier, 30–40 % räntor, och ${els.return.value} % förväntad avkastning nominellt.`;
 }
 
@@ -120,6 +116,23 @@ document.querySelectorAll('input[name="pensionMode"]').forEach(radio => {
   });
 });
 
+// "Hur mycket kan jag ta ut?" — waiting a few more years before actually
+// withdrawing lets the capital (and, if you keep saving, new contributions)
+// keep compounding first, so the sustainable withdrawal it supports later is
+// higher than what the same capital supports today.
+const withdrawWaitFields = document.getElementById('withdraw-wait-fields');
+const withdrawTimingHint = document.getElementById('withdraw-timing-hint');
+document.querySelectorAll('input[name="withdrawTiming"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    const wait = radio.value === 'wait';
+    withdrawWaitFields.hidden = !wait;
+    withdrawTimingHint.textContent = wait
+      ? 'Kapitalet får växa och du fortsätter spara i ytterligare några år innan uttaget beräknas.'
+      : 'Uttaget beräknas utifrån ditt kapital redan idag, som om du gick i FIRE direkt utan att vänta eller spara mer.';
+    recalculate();
+  });
+});
+
 // ---------- Formatting ----------
 
 function currencyMeta() {
@@ -135,21 +148,28 @@ function fmtMoney(n) {
   return `${fmtNumber(n)} ${currencyMeta().symbol}`;
 }
 
-// ---------- Capital allocation (percentage of one total capital slider) ----------
+// ---------- Capital allocation ----------
+//
+// Blandportfölj: a single bucket using the plain "Blandportfölj" rate/tax
+// (same as tab 1) — no split to configure at all here.
+//
+// Egen fördelning: Aktier/fonder, Räntor and Sparkonto each have their own
+// %-slider, always summing to 100 — rebalanced back to that %-split every
+// year (see makeRebalancer()/getParams()).
 
 let currentAllocation = { stocks: 1, bonds: 0, savings: 0 };
 
-// Aktier/fonder, Räntor and Sparkonto each have their own draggable %-slider
-// (all 0–100), kept summing to 100 by a priority order rather than every pair
-// trading with every other: dragging Aktier/fonder rebalances Räntor and
-// Sparkonto together (proportionally, in whatever ratio they already have to
-// each other); dragging either Räntor or Sparkonto instead trades directly
-// with the other one of the two, leaving Aktier/fonder untouched.
-function rebalanceAlloc(changedKey) {
-  const sliders = { stocks: els['alloc-stocks'], bonds: els['alloc-bonds'], savings: els['alloc-savings'] };
+// Aktier/fonder (top) is the primary slider: dragging it rebalances Räntor
+// and Sparkonto proportionally, in whatever ratio they already have to each
+// other, to make room. Räntor and Sparkonto then trade directly with each
+// other when either is dragged on its own, leaving Aktier/fonder untouched
+// — what's above stays put; what's below absorbs the change.
+function rebalanceAllocPct(changedKey) {
+  const sliders = { stocks: els['alloc-stocks-pct'], bonds: els['alloc-bonds-pct'], savings: els['alloc-savings-pct'] };
 
   if (changedKey === 'stocks') {
-    const stocks = +sliders.stocks.value;
+    const stocks = Math.max(0, Math.min(+sliders.stocks.value, 100));
+    sliders.stocks.value = stocks;
     const remainder = 100 - stocks;
     const otherSum = +sliders.bonds.value + +sliders.savings.value;
 
@@ -158,62 +178,85 @@ function rebalanceAlloc(changedKey) {
       sliders[k].value = Math.max(0, Math.round(remainder * share));
     });
 
-    // rounding can leave the total slightly off 100 — absorb it into savings.
+    // rounding can leave the total slightly off — absorb it into savings.
     const leftover = remainder - (+sliders.bonds.value + +sliders.savings.value);
     sliders.savings.value = Math.max(0, +sliders.savings.value + leftover);
   } else {
-    // Räntor and Sparkonto trade directly with each other; Aktier/fonder is
-    // fixed, so neither can push their combined total past what it leaves.
     const partnerKey = changedKey === 'bonds' ? 'savings' : 'bonds';
     const stocks = +sliders.stocks.value;
-    const changedValue = Math.max(0, Math.min(+sliders[changedKey].value, 100 - stocks));
+    const room = 100 - stocks;
+    const changedValue = Math.max(0, Math.min(+sliders[changedKey].value, room));
     sliders[changedKey].value = changedValue;
-    sliders[partnerKey].value = Math.max(0, 100 - stocks - changedValue);
+    sliders[partnerKey].value = Math.max(0, room - changedValue);
   }
 }
 
-els['alloc-stocks'].addEventListener('input', () => rebalanceAlloc('stocks'));
-els['alloc-bonds'].addEventListener('input', () => rebalanceAlloc('bonds'));
-els['alloc-savings'].addEventListener('input', () => rebalanceAlloc('savings'));
+els['alloc-stocks-pct'].addEventListener('input', () => rebalanceAllocPct('stocks'));
+els['alloc-bonds-pct'].addEventListener('input', () => rebalanceAllocPct('bonds'));
+els['alloc-savings-pct'].addEventListener('input', () => rebalanceAllocPct('savings'));
 
 function updateAllocationDisplay() {
   const isSplit = document.querySelector('input[name="capitalMode"]:checked').value === 'split';
-  let stocks, bonds, savings;
+  const totalCapital = +els['total-capital'].value;
+  let stocks, bonds, savings; // kr, always — used for currentAllocation and the blended rate below
 
-  if (isSplit) {
-    stocks = +els['alloc-stocks'].value;
-    bonds = +els['alloc-bonds'].value;
-    savings = +els['alloc-savings'].value;
-  } else {
-    // "samlat kapital" — treated as 100% aktier/fonder, same as tab 1's model.
-    stocks = 100;
+  if (!isSplit) {
+    // Blandportfölj — treated as one bucket using the Blandportfölj rate,
+    // same as tab 1's model (see getParams()).
+    stocks = totalCapital;
     bonds = 0;
     savings = 0;
-  }
-  const total = stocks + bonds + savings || 1; // guard against all three being 0
+  } else {
+    const stocksPct = +els['alloc-stocks-pct'].value;
+    const bondsPct = +els['alloc-bonds-pct'].value;
+    const savingsPct = +els['alloc-savings-pct'].value;
+    stocks = totalCapital * stocksPct / 100;
+    bonds = totalCapital * bondsPct / 100;
+    savings = totalCapital * savingsPct / 100;
 
-  els['out-alloc-stocks'].textContent = stocks;
-  els['out-alloc-bonds'].textContent = bonds;
-  els['out-alloc-savings'].textContent = savings;
+    els['out-alloc-stocks-pct'].textContent = stocksPct;
+    els['out-alloc-bonds-pct'].textContent = bondsPct;
+    els['out-alloc-savings-pct'].textContent = savingsPct;
+    document.getElementById('alloc-stocks-pct-hint').textContent = `Motsvarar ${fmtNumber(stocks)} kr.`;
+    document.getElementById('alloc-bonds-pct-hint').textContent = `Motsvarar ${fmtNumber(bonds)} kr.`;
+    document.getElementById('alloc-savings-pct-hint').textContent = `Motsvarar ${fmtNumber(savings)} kr.`;
+  }
+
+  const total = stocks + bonds + savings;
+
   els['out-return-stocks'].textContent = els['return-stocks'].value;
   els['out-return-bonds'].textContent = els['return-bonds'].value;
   els['out-return-savings'].textContent = els['return-savings'].value;
 
-  const totalCapital = +els['total-capital'].value;
-  els['out-alloc-stocks-kr'].textContent = fmtNumber(totalCapital * stocks / 100);
-  els['out-alloc-bonds-kr'].textContent = fmtNumber(totalCapital * bonds / 100);
-  els['out-alloc-savings-kr'].textContent = fmtNumber(totalCapital * savings / 100);
+  // A 0 kr "Totalt investerat kapital" collapses stocks/bonds/savings (all
+  // literal kr amounts) to 0/0/0 too, which would otherwise wipe out the
+  // split you actually chose — the %-sliders still define a real ratio even
+  // at 0 kr, so read the ratio straight from them instead of from the (now
+  // zeroed) kr amounts.
+  if (total > 0) {
+    currentAllocation = { stocks: stocks / total, bonds: bonds / total, savings: savings / total };
+  } else if (!isSplit) {
+    currentAllocation = { stocks: 1, bonds: 0, savings: 0 };
+  } else {
+    currentAllocation = {
+      stocks: +els['alloc-stocks-pct'].value / 100,
+      bonds: +els['alloc-bonds-pct'].value / 100,
+      savings: +els['alloc-savings-pct'].value / 100,
+    };
+  }
 
-  currentAllocation = { stocks: stocks / total, bonds: bonds / total, savings: savings / total };
-
-  // "Blandad avkastning" — the single nominal rate your custom split works
-  // out to overall, weighted by each bucket's own share, so you can compare
-  // it at a glance to the plain Blandportfölj rate above.
-  const blendedReturn = (stocks * (+els['return-stocks'].value)
-    + bonds * (+els['return-bonds'].value)
-    + savings * (+els['return-savings'].value)) / total;
-  document.getElementById('blended-return-hint').textContent =
-    `Blandad avkastning: ${blendedReturn.toFixed(1).replace('.', ',')} % nominellt, givet din fördelning ovan.`;
+  // "Blandad avkastning" — only shown inside Egen fördelning (Blandportfölj
+  // already shows its own rate via capital-mode-hint above) — the single
+  // nominal rate your chosen split works out to overall, weighted by each
+  // bucket's own share, computed from currentAllocation itself (not the raw
+  // kr amounts) so it stays correct even at 0 kr.
+  if (isSplit) {
+    const blendedReturn = currentAllocation.stocks * (+els['return-stocks'].value)
+      + currentAllocation.bonds * (+els['return-bonds'].value)
+      + currentAllocation.savings * (+els['return-savings'].value);
+    document.getElementById('blended-return-hint').textContent =
+      `Blandad avkastning: ${blendedReturn.toFixed(1).replace('.', ',')} % nominellt, givet din fördelning ovan.`;
+  }
 }
 
 // The one "Totalt kapital" slider, split across the three buckets by their
@@ -239,7 +282,7 @@ const FIRE_LEVELS = [
   { min: 30000, name: 'Chubby FIRE', desc: 'Det välbärgade gränslandet. Du har en guldkant på tillvaron med utrymme för resor, restauranger och extra bekvämligheter.' },
   { min: 40000, name: 'Fat FIRE', desc: 'Ren lyxnivå i Sverige. Du kan bo dyrt, resa i business class och köpa kvalitetsprodukter utan att titta på prislappen.' },
   { min: 60000, name: 'Obese FIRE', desc: 'Extremt hög levnadsstandard. Ekonomin begränsar dig inte på något realistiskt sätt i vardagen.' },
-  { min: 100000, name: 'Whale FIRE', desc: 'Ekonomiskt oberoende på generationsnivå. Du rör dig i samma ekonomiska sfär som höginkomsttagare, egendomsägare och mångmiljonärer.' },
+  { min: 100000, name: 'Whale FIRE', desc: 'Ekonomiskt oberoende på generationsnivå, i samma sfär som höginkomsttagare och mångmiljonärer.' },
 ];
 
 function fireLevelFor(spend) {
@@ -259,6 +302,8 @@ function syncDisplays() {
   const fireLevel = fireLevelFor(+els.spend.value);
   document.getElementById('spend-hint').textContent = `${fireLevel.name} — ${fireLevel.desc}`;
   els['out-savings'].textContent = fmtNumber(+els.savings.value);
+  els['out-waitYears'].textContent = els.waitYears.value;
+  els['out-waitSavings'].textContent = fmtNumber(+els.waitSavings.value);
   els['out-total-capital'].textContent = fmtNumber(+els['total-capital'].value);
   els['out-return'].textContent = els.return.value;
   els['out-comparerate'].textContent = els.comparerate.value.replace('.', ',');
@@ -288,18 +333,18 @@ function getParams() {
   // slider is a no-op here, so there's no need for a separate on/off toggle.
   const toReal = nominal => (1 + nominal) / (1 + inflation) - 1;
 
-  // Blandportfölj, Aktie/fondportfölj and Ränteportfölj are all assumed to
-  // sit in an ISK — schablonskatt, applied annually on the account's full
-  // value, withdrawals then tax-free — independently adjustable, they just
-  // happen to share the same 1% default.
+  // Blandportfölj (tab 1's own simplified rate, below), Aktier/fonder and
+  // Räntor are all assumed to sit in an ISK — schablonskatt, applied
+  // annually on the account's full value, withdrawals then tax-free —
+  // independently adjustable, they just happen to share the same 1% default.
   const BLEND_TAX = +els['tax-isk-blend'].value / 100;
   const STOCKS_TAX = +els['tax-isk-stocks'].value / 100;
   const BONDS_TAX = +els['tax-bonds'].value / 100;
   const SAVINGS_TAX = +els['tax-savings'].value / 100;
 
-  // The simplified 100%-aktier model (tab 1, no buckets) always uses the
-  // Blandportfölj rate — never the Aktier/fonder bucket rate, even if
-  // "Egen fördelning" happens to be selected.
+  // The simplified 100%-aktier model (tab 1, no buckets, no Kapital section
+  // at all) always uses its own Blandportfölj rate — separate from the
+  // Aktier/fonder-bucket rate used everywhere else.
   const simpleReal = (1 + toReal(+els.return.value / 100)) * (1 - BLEND_TAX) - 1;
 
   let growthRate = simpleReal;
@@ -312,8 +357,8 @@ function getParams() {
 
     // "samlat kapital" (Blandportfölj) reuses the same rate and ISK tax as
     // tab 1; it's literally the same model, just also usable in tabs 2-4.
-    // Only once you actually split into buckets does Aktier/fonder's own
-    // rate and tax come into play.
+    // Only once you actually split into Egen fördelning does Aktier/fonder's
+    // own rate and tax come into play.
     const isSplit = document.querySelector('input[name="capitalMode"]:checked').value === 'split';
     const stocksNominal = isSplit ? +els['return-stocks'].value : +els.return.value;
     const stocksTax = isSplit ? STOCKS_TAX : BLEND_TAX;
@@ -373,12 +418,15 @@ function meetsEndGoal(finalBalance, startBalance, params) {
   return true; // 'die' — no floor beyond not running out early
 }
 
-function pensionIncomeAt(age, pensions) {
-  return pensions.reduce((sum, p) => sum + (age >= p.startAge ? p.amount : 0), 0);
-}
-
 // each pension is taxed as ordinary income at its own rate — separate from,
 // and usually different than, the tax on withdrawals from the portfolio.
+// Whether pension is being paid at this exact instant in time — a plain
+// step at the birthday, no averaging. simulateBuckets() below is the one
+// place a "year" can straddle a birthday (its starting age can be a
+// fractional "blir redo" crossing), and it handles that by splitting the
+// year into sub-periods at the birthday itself and evaluating this at each
+// sub-period's own start — so the instant check here is all that's needed;
+// there's never a fraction of a single pension left over to average.
 function pensionNetIncomeAt(age, pensions) {
   return pensions.reduce((sum, p) => sum + (age >= p.startAge ? p.amount * (1 - p.taxRate) : 0), 0);
 }
@@ -426,16 +474,6 @@ function solveRequiredBalance(monthlySpend, startAge, params) {
   return hi;
 }
 
-// Binary search for the maximum monthly spend a given balance can sustain.
-function solveMaxSpend(startBalance, startAge, params) {
-  let lo = 0, hi = startBalance; // a spend of 100% of balance per month is always way more than enough as an upper bound
-  for (let i = 0; i < 60; i++) {
-    const mid = (lo + hi) / 2;
-    if (succeeds(startBalance, startAge, mid, params)) lo = mid; else hi = mid;
-  }
-  return lo;
-}
-
 function bucketsTotal(b) { return b.stocks + b.bonds + b.savings; }
 
 // The target split to rebalance back to every year, derived from whatever
@@ -452,6 +490,16 @@ function bucketShape(buckets) {
     : { stocks: 1, bonds: 0, savings: 0 };
 }
 
+// Returns a `total => {stocks, bonds, savings}` rebalancer that keeps the
+// given starting `buckets`' own %-split — used by both Blandportfölj
+// (a no-op single bucket) and Egen fördelning, so "your chosen split" stays
+// exactly that for the entire horizon instead of drifting toward whichever
+// bucket happens to compound fastest.
+function makeRebalancer(buckets) {
+  const shape = bucketShape(buckets);
+  return total => ({ stocks: total * shape.stocks, bonds: total * shape.bonds, savings: total * shape.savings });
+}
+
 // Bucket-aware decumulation: tracks stocks/bonds/savings separately through
 // every year of withdrawal, each compounding (and being drawn down) at its
 // own rate, then rebalanced back to the original split at the end of the
@@ -464,39 +512,67 @@ function bucketShape(buckets) {
 function simulateBuckets(startBuckets, startAge, monthlySpend, params) {
   const { stocksRate, bondsRate, savingsRate, pensions, lifespan } = params;
   let stocks = startBuckets.stocks, bonds = startBuckets.bonds, savings = startBuckets.savings;
-  const shape = bucketShape(startBuckets);
+  const rebalance = makeRebalancer(startBuckets);
   const path = [{ age: startAge, balance: stocks + bonds + savings }];
   let failedAtAge = null;
 
   for (let age = startAge; age < lifespan; age++) {
-    const pensionNet = pensionNetIncomeAt(age, pensions);
-    const netGap = Math.max(0, monthlySpend - pensionNet);
-    const total = stocks + bonds + savings;
-    const annualWithdrawal = netGap * 12;
+    const yearEnd = age + 1;
+    // split this year at any pension birthday strictly inside it — the
+    // simulation's own starting age can be a fractional "blir redo"
+    // crossing, so a birthday can land mid-step instead of exactly on a
+    // step boundary. No pension for the sub-period before it, full pension
+    // for the sub-period after, each compounding only over its own
+    // (fractional) share of the year — averaging the whole year at one
+    // blended rate instead reads as a small kink right at the birthday.
+    const splitAges = [...new Set(pensions.map(p => p.startAge).filter(a => a > age && a < yearEnd))];
+    const bounds = [age, ...splitAges, yearEnd].sort((a, b) => a - b);
 
-    if (annualWithdrawal > total) {
-      if (failedAtAge === null) failedAtAge = age;
-      stocks = 0; bonds = 0; savings = 0;
-    } else if (total > 0) {
-      // withdraw proportionally across all three, same blended-by-allocation
-      // philosophy the rest of the tool uses elsewhere.
-      stocks = Math.max(0, stocks - annualWithdrawal * (stocks / total));
-      bonds = Math.max(0, bonds - annualWithdrawal * (bonds / total));
-      savings = Math.max(0, savings - annualWithdrawal * (savings / total));
+    for (let s = 0; s < bounds.length - 1; s++) {
+      const subStart = bounds[s], subYears = bounds[s + 1] - bounds[s];
+      const pensionNet = pensionNetIncomeAt(subStart, pensions);
+      const netGap = Math.max(0, monthlySpend - pensionNet);
+      const total = stocks + bonds + savings;
+      const subWithdrawal = netGap * 12 * subYears;
+
+      if (subWithdrawal > total) {
+        if (failedAtAge === null) failedAtAge = age;
+        stocks = 0; bonds = 0; savings = 0;
+      } else if (total > 0) {
+        // withdraw proportionally across all three, same blended-by-allocation
+        // philosophy the rest of the tool uses elsewhere.
+        stocks = Math.max(0, stocks - subWithdrawal * (stocks / total));
+        bonds = Math.max(0, bonds - subWithdrawal * (bonds / total));
+        savings = Math.max(0, savings - subWithdrawal * (savings / total));
+      }
+
+      stocks *= Math.pow(1 + stocksRate, subYears);
+      bonds *= Math.pow(1 + bondsRate, subYears);
+      savings *= Math.pow(1 + savingsRate, subYears);
+
+      // a birthday landing mid-step means the true turn from declining to
+      // rising (or vice versa) happens at that exact age, not at either
+      // whole-year mark either side of it — without a real plotted point
+      // there, the chart just draws one straight line across the turn,
+      // which reads as a small kink instead of a clean vertex.
+      const subEnd = bounds[s + 1];
+      if (subEnd !== yearEnd) path.push({ age: subEnd, balance: stocks + bonds + savings });
     }
 
-    stocks *= (1 + stocksRate);
-    bonds *= (1 + bondsRate);
-    savings *= (1 + savingsRate);
-
-    // annual rebalance back to the target split.
+    // annual rebalance back to the target %-split — once per full year, at
+    // the end, same as always (not per sub-period).
     const rebalanced = stocks + bonds + savings;
-    stocks = rebalanced * shape.stocks;
-    bonds = rebalanced * shape.bonds;
-    savings = rebalanced * shape.savings;
+    ({ stocks, bonds, savings } = rebalance(rebalanced));
 
     path.push({ age: age + 1, balance: Math.max(0, stocks + bonds + savings) });
   }
+
+  // when startAge is fractional (a "blir redo" crossing rather than a whole
+  // slider year), stepping by whole years from it can overshoot lifespan by
+  // up to just under a year — clamp the final point back to exactly
+  // lifespan so it reads as "90 år", not "90.8 år" rounded up to 91.
+  const last = path[path.length - 1];
+  if (last.age > lifespan) last.age = lifespan;
 
   return { path, failedAtAge };
 }
@@ -525,9 +601,12 @@ function solveMaxSpendBuckets(startBuckets, startAge, params) {
 // Binary search for the minimum total capital — kept in the same bucket shape
 // as `buckets` — that survives to lifespan.
 function solveRequiredBalanceBuckets(monthlySpend, startAge, buckets, params) {
-  const total = bucketsTotal(buckets);
-  if (total <= 0) return solveRequiredBalance(monthlySpend, startAge, params); // no shape to scale — fall back
-  const shape = { stocks: buckets.stocks / total, bonds: buckets.bonds / total, savings: buckets.savings / total };
+  // bucketShape() already handles an empty (all-zero) `buckets` the same way
+  // accumulate()/simulateBuckets() do (100% Aktier/fonder) — using that same
+  // fallback here, instead of a separate flat-rate one, keeps "what you'd
+  // need today" consistent with what your future savings would actually be
+  // invested as, rather than silently assuming a different mix.
+  const shape = bucketShape(buckets);
 
   let lo = 0, hi = monthlySpend * 12 * 100;
   for (let i = 0; i < 60; i++) {
@@ -538,12 +617,19 @@ function solveRequiredBalanceBuckets(monthlySpend, startAge, buckets, params) {
   return hi;
 }
 
-// Looks up the balance at a given age along a path, clamped to the path's own range.
+// Looks up the balance at a given age along a path, clamped to the path's own
+// range. Matches the nearest point rather than requiring an exact age match
+// — every point used to sit at a whole-number age, but findFireAge()'s
+// "blir redo" crossing point can now sit at a fractional one.
 function capitalAtAge(path, age) {
   const minAge = path[0].age, maxAge = path[path.length - 1].age;
   const clamped = Math.min(maxAge, Math.max(minAge, age));
-  const point = path.find(p => p.age === clamped) || path[path.length - 1];
-  return point.balance;
+  let closest = path[0], closestDiff = Math.abs(closest.age - clamped);
+  for (const p of path) {
+    const diff = Math.abs(p.age - clamped);
+    if (diff < closestDiff) { closest = p; closestDiff = diff; }
+  }
+  return closest.balance;
 }
 
 // Simulates the accumulation phase with the three buckets tracked separately —
@@ -558,7 +644,7 @@ function capitalAtAge(path, age) {
 // breakdown to know each bucket's actual value once decumulation starts.
 function accumulate(startBuckets, startAge, monthlySavings, params, maxAge) {
   let { stocks, bonds, savings } = startBuckets;
-  const shape = bucketShape(startBuckets);
+  const rebalance = makeRebalancer(startBuckets);
   const path = [{ age: startAge, balance: stocks + bonds + savings, stocks, bonds, savings }];
   for (let age = startAge; age < maxAge; age++) {
     stocks += monthlySavings * 12;
@@ -566,11 +652,9 @@ function accumulate(startBuckets, startAge, monthlySavings, params, maxAge) {
     bonds *= (1 + params.bondsRate);
     savings *= (1 + params.savingsRate);
 
-    // annual rebalance back to the target split.
+    // annual rebalance back to the target %-split.
     const total = stocks + bonds + savings;
-    stocks = total * shape.stocks;
-    bonds = total * shape.bonds;
-    savings = total * shape.savings;
+    ({ stocks, bonds, savings } = rebalance(total));
 
     path.push({ age: age + 1, balance: stocks + bonds + savings, stocks, bonds, savings });
   }
@@ -578,14 +662,73 @@ function accumulate(startBuckets, startAge, monthlySavings, params, maxAge) {
 }
 
 // Finds the first age at which accumulated savings meet the required FIRE number
-// for retiring at that same age (reusing solveRequiredBalance for each candidate age).
+// for retiring at that same age (reusing solveRequiredBalanceBuckets — the
+// same bucket- and rebalance-mode-aware solver the rest of "ready" already
+// uses for its caption — for each candidate age, scaled to that point's own
+// actual stocks/bonds/savings shape rather than a single flat blended rate).
+//
+// accumulate() only checks once a year, so the year readiness is actually
+// crossed can leave the balance sitting anywhere up to a full year's growth
+// above the requirement — purely an artifact of which month within that
+// year the crossing happened to fall, not a real difference in outcome. Left
+// uncorrected, that arbitrary "overshoot" then compounds for the rest of the
+// horizon under Bevara kapitalet, which can make two rebalance modes look
+// very different at the end age even though neither is actually doing
+// better — see the linear interpolation below, which finds the fractional
+// point within that year where balance ≈ required and starts decumulation
+// from there instead, while still reporting the same whole-number age.
 function findFireAge(startBuckets, startAge, monthlySavings, monthlySpend, params, maxAge) {
   const accPath = accumulate(startBuckets, startAge, monthlySavings, params, maxAge);
-  for (const point of accPath) {
-    const required = solveRequiredBalance(monthlySpend, point.age, params);
+  let prevPoint = accPath[0];
+
+  for (let i = 1; i < accPath.length; i++) {
+    const point = accPath[i];
+    // retiring with zero years left before the end age isn't meaningful
+    // readiness — a 0-year decumulation window always trivially "succeeds"
+    // (nothing left to fund), so solveRequiredBalanceBuckets would return
+    // ~0 here regardless of actual capital, falsely reporting "redo" right
+    // at the very end age no matter how insufficient the capital really is.
+    if (point.age >= maxAge) break;
+
+    const required = solveRequiredBalanceBuckets(monthlySpend, point.age, point, params);
     if (point.balance >= required) {
-      return { age: point.age, required, path: accPath.filter(p => p.age <= point.age) };
+      // accumulate() only checks once a year, so the year readiness is
+      // actually crossed can leave the balance sitting anywhere up to a
+      // full year's growth above the requirement — an artifact of which
+      // month within that year the crossing happened to fall, not a real
+      // difference in outcome. Left uncorrected, that arbitrary "overshoot"
+      // then compounds for the rest of the horizon under Bevara kapitalet,
+      // and a tiny slider nudge that flips which whole year you cross in
+      // can make the reported outcome swing wildly.
+      //
+      // The required threshold itself can also move within that same year
+      // — with pension counted in, retiring one year later needs less
+      // bridge capital, so `required` can be dropping while `balance` is
+      // rising. Rather than approximate both as straight lines (which
+      // doesn't hold up well — the true relationship compounds, it doesn't
+      // move linearly), bisect directly for the fractional age where
+      // capital (linearly interpolated between these two known
+      // accumulation points — the only two data points actually available)
+      // exactly matches the ACTUAL required balance solved fresh at that
+      // same fractional age, now that pensionNetIncomeAt() can prorate a
+      // birthday landing mid-step instead of only ever seeing whole years.
+      const shape = bucketShape(point);
+      const capitalAt = age => prevPoint.balance + (age - prevPoint.age) * (point.balance - prevPoint.balance);
+      const bucketsAt = age => {
+        const bal = capitalAt(age);
+        return { age, balance: bal, stocks: shape.stocks * bal, bonds: shape.bonds * bal, savings: shape.savings * bal };
+      };
+      const gapAt = age => capitalAt(age) - solveRequiredBalanceBuckets(monthlySpend, age, bucketsAt(age), params);
+
+      let lo = prevPoint.age, hi = point.age;
+      for (let iter = 0; iter < 30; iter++) {
+        const mid = (lo + hi) / 2;
+        if (gapAt(mid) >= 0) hi = mid; else lo = mid;
+      }
+      const crossing = bucketsAt(hi);
+      return { age: point.age, required: crossing.balance, path: accPath.slice(0, i).concat([crossing]) };
     }
+    prevPoint = point;
   }
   return null;
 }
@@ -697,7 +840,7 @@ function drawChart(path, failedAtAge) {
   svg.appendChild(overlay);
 
   document.getElementById('chart-axis').innerHTML =
-    `<span>${minAge} år</span><span>${maxAge} år</span>`;
+    `<span>${Math.round(minAge)} år</span><span>${Math.round(maxAge)} år</span>`;
 }
 
 function handleChartHover(evt) {
@@ -706,9 +849,15 @@ function handleChartHover(evt) {
   const rect = svg.getBoundingClientRect();
   const svgX = (evt.clientX - rect.left) / rect.width * W;
 
-  const age = Math.round(minAge + (svgX - PAD_LEFT) / (W - PAD_LEFT - PAD_RIGHT) * (maxAge - minAge));
+  const age = minAge + (svgX - PAD_LEFT) / (W - PAD_LEFT - PAD_RIGHT) * (maxAge - minAge);
   const clampedAge = Math.min(maxAge, Math.max(minAge, age));
-  const point = path.find(p => p.age === clampedAge) || path[path.length - 1];
+  // nearest point rather than an exact age match — the "blir redo" crossing
+  // point can sit at a fractional age, same reasoning as capitalAtAge().
+  let point = path[0], closestDiff = Math.abs(point.age - clampedAge);
+  for (const p of path) {
+    const diff = Math.abs(p.age - clampedAge);
+    if (diff < closestDiff) { point = p; closestDiff = diff; }
+  }
 
   const hoverDot = document.getElementById('chart-hover-dot');
   hoverDot.setAttribute('cx', x(point.age));
@@ -716,7 +865,7 @@ function handleChartHover(evt) {
   hoverDot.setAttribute('visibility', 'visible');
 
   tooltip.hidden = false;
-  tooltip.textContent = `${point.age} år — ${fmtMoney(point.balance)}`;
+  tooltip.textContent = `${Math.round(point.age)} år — ${fmtMoney(point.balance)}`;
 
   const wrapRect = svg.parentElement.getBoundingClientRect();
   const dotClientX = rect.left + (x(point.age) / W) * rect.width;
@@ -790,7 +939,12 @@ function recalculate() {
         // continue the chart through retirement too, so the x-axis always
         // spans all the way to the end age, same as every other mode.
         const endBuckets = found.path[found.path.length - 1];
-        const decum = simulateBuckets(endBuckets, found.age, spend, params);
+        // starts from the crossing's own (possibly fractional) age, not the
+        // rounded-up found.age — pensionNetIncomeAt() prorates a birthday
+        // landing mid-step, so this is now the one true continuous
+        // simulation consistent with what findFireAge() actually solved
+        // for, rather than a whole-year approximation of it.
+        const decum = simulateBuckets(endBuckets, endBuckets.age, spend, params);
         chartResult = { path: found.path.concat(decum.path.slice(1)), failedAtAge: decum.failedAtAge };
         fireStartAge = found.age;
         eyebrow = 'Du blir redo';
@@ -829,16 +983,48 @@ function recalculate() {
     // 'withdraw'
     const startBuckets = computeStartBuckets();
     const balance = bucketsTotal(startBuckets);
+    const willWait = document.querySelector('input[name="withdrawTiming"]:checked').value === 'wait';
 
-    const maxSpend = solveMaxSpendBuckets(startBuckets, age, params);
-    const decum = simulateBuckets(startBuckets, age, maxSpend, params);
-    chartResult = decum;
-    fireStartAge = age;
+    let spendBuckets = startBuckets;
+    let spendStartAge = age;
+    let accPath = null;
+
+    if (willWait) {
+      const waitYears = +els.waitYears.value;
+      const waitSavings = +els.waitSavings.value;
+      spendStartAge = age + waitYears;
+      // reuses the exact same accumulation model "När är jag redo?" uses —
+      // the capital (and any continued monthly savings) just keeps
+      // compounding for these extra years before withdrawal starts.
+      accPath = accumulate(startBuckets, age, waitSavings, params, spendStartAge);
+      const grown = accPath[accPath.length - 1];
+      spendBuckets = { stocks: grown.stocks, bonds: grown.bonds, savings: grown.savings };
+    }
+
+    const maxSpend = solveMaxSpendBuckets(spendBuckets, spendStartAge, params);
+    const decum = simulateBuckets(spendBuckets, spendStartAge, maxSpend, params);
+    // continue the chart through the wait years too, same as "När är jag
+    // redo?" does for its own accumulation-then-decumulation path.
+    chartResult = willWait ? { path: accPath.concat(decum.path.slice(1)), failedAtAge: decum.failedAtAge } : decum;
+    fireStartAge = spendStartAge;
 
     eyebrow = 'Du kan ta ut';
     headline = `${fmtMoney(maxSpend)}/mån`;
-    caption = `riskfritt varje månad, i dagens pengar, utan att kapitalet tar slut före ${params.lifespan} års ålder.`;
-    comparisonText = `${fmtMoney(balance * compareRate / 12)}/mån`;
+    if (willWait) {
+      // the "go now" figure isn't shown anywhere else once you flip to
+      // "Vänta lite till", so the caption is the one place this comparison
+      // — the whole point of the toggle — actually gets seen.
+      const nowMaxSpend = solveMaxSpendBuckets(startBuckets, age, params);
+      caption = `riskfritt varje månad från ${spendStartAge} års ålder, om du väntar ${els.waitYears.value} år till — jämfört med ${fmtMoney(nowMaxSpend)}/månad om du gick i FIRE redan idag.`;
+    } else {
+      caption = `riskfritt varje månad, i dagens pengar, utan att kapitalet tar slut före ${params.lifespan} års ålder.`;
+    }
+
+    // the flat-rule sanity check stays on the same timeframe as the headline
+    // above it — today's balance when going now, the grown balance when
+    // waiting — rather than always comparing against today's.
+    const compareBalance = willWait ? bucketsTotal(spendBuckets) : balance;
+    comparisonText = `${fmtMoney(compareBalance * compareRate / 12)}/mån`;
   }
 
   document.getElementById('result-eyebrow').textContent = eyebrow;
@@ -849,7 +1035,9 @@ function recalculate() {
   // three consistent checkpoints, in every mode: capital when FIRE starts,
   // when pension kicks in, and at the end age — labels show the actual age.
   const pensionAgeSetting = +els.pensionage.value;
-  const endAge = chartResult.path[chartResult.path.length - 1].age;
+  // rounded for display — the rebased decumulation path (see above) can
+  // leave the very last point sitting a fraction of a year off lifespan.
+  const endAge = Math.round(chartResult.path[chartResult.path.length - 1].age);
 
   document.getElementById('dt-lasts').textContent = fireStartAge !== null ? `Kapital vid ${fireStartAge} år` : 'Kapital vid FIRE';
   document.getElementById('stat-lasts').textContent =

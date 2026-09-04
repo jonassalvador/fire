@@ -5,7 +5,7 @@
   --ink-soft: #6f6a61;
   --rule: #d9d3c6;
   --accent: #c1491f;
-  --accent-soft: #c1491f1a;
+  --accent-soft: #c1491f1a; /* used directly by drawChart()'s inline SVG fill in script.js — grepping style.css alone won't find that usage */
 
   --serif: "Fraunces", Georgia, "Times New Roman", serif;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -371,18 +371,6 @@ body {
   }
 }
 
-.field--select select {
-  grid-column: 1 / -1;
-  font-family: var(--sans);
-  font-size: 15px;
-  padding: 10px 12px;
-  background: var(--paper-raised);
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  color: var(--ink);
-  margin-top: 6px;
-}
-
 /* ---------- Strategy toggle ---------- */
 
 .strategy-toggle {
@@ -469,7 +457,8 @@ body {
    content) — it only needs zeroing when that wrapper is hidden instead,
    making the hint the last visible thing in the section. */
 #strategy-hint:has(+ #die-with-zero-fields[hidden]),
-#pension-hint:has(+ #pension-fields[hidden]) { margin-bottom: 0; }
+#pension-hint:has(+ #pension-fields[hidden]),
+#withdraw-timing-hint:has(+ #withdraw-wait-fields[hidden]) { margin-bottom: 0; }
 
 /* a hint explaining the switch right above it should read as part of that
    switch, not as its own loosely-spaced section — true for every
@@ -482,9 +471,9 @@ body {
    last child is one) ends up with visibly more bottom space than a section
    that happens to end in a plain .field, which is already zeroed below. */
 .field-hint:last-child { margin-bottom: 0; }
-/* the capital-mode hint sits right before the (sometimes hidden) bucket card
-   — when that card is hidden ("Generell balanserad portfölj"), the hint is
-   really the last visible thing in the section, so needs the same zeroing. */
+/* capital-mode-hint sits right before #capital-split-fields — when
+   Blandportfölj is selected that card is hidden, making the hint the last
+   visible thing in the section, so it needs the same zeroing. */
 .field-hint:has(+ #capital-split-fields[hidden]:last-child) { margin-bottom: 0; }
 
 /* ---------- Result panel ---------- */

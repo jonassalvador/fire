@@ -50,6 +50,34 @@
         <span class="field__value"><output id="out-savings">15 000</output> <span class="unit"></span></span>
         <input type="range" id="savings" min="0" max="100000" value="15000" step="1000">
       </label>
+
+      <div data-modes="withdraw">
+        <div class="strategy-toggle">
+          <label class="strategy-toggle__option">
+            <input type="radio" name="withdrawTiming" id="withdraw-now" value="now" checked>
+            <span>Gå i FIRE nu</span>
+          </label>
+          <label class="strategy-toggle__option">
+            <input type="radio" name="withdrawTiming" id="withdraw-wait" value="wait">
+            <span>Vänta lite till</span>
+          </label>
+        </div>
+        <p class="field-hint" id="withdraw-timing-hint">Uttaget beräknas utifrån ditt kapital redan idag, som om du gick i FIRE direkt utan att vänta eller spara mer.</p>
+
+        <div id="withdraw-wait-fields" hidden>
+          <label class="field">
+            <span class="field__label">Antal år att vänta</span>
+            <span class="field__value"><output id="out-waitYears">5</output> år</span>
+            <input type="range" id="waitYears" min="0" max="30" value="5" step="1">
+          </label>
+
+          <label class="field">
+            <span class="field__label">Månatligt sparande under väntetiden</span>
+            <span class="field__value"><output id="out-waitSavings">15 000</output> <span class="unit"></span></span>
+            <input type="range" id="waitSavings" min="0" max="100000" value="15000" step="1000">
+          </label>
+        </div>
+      </div>
     </div>
 
     <div class="field-group">
@@ -113,30 +141,31 @@
       <div id="capital-split-fields" hidden>
         <div class="asset-card">
           <label class="field">
-            <span class="field__label">Aktie/fondportfölj</span>
-            <span class="field__value"><output id="out-alloc-stocks">70</output> %</span>
-            <input type="range" id="alloc-stocks" min="0" max="100" value="70" step="1">
+            <span class="field__label">Aktier/fonder</span>
+            <span class="field__value"><output id="out-alloc-stocks-pct">70</output> %</span>
+            <input type="range" id="alloc-stocks-pct" min="0" max="100" value="70" step="1">
           </label>
-          <p class="field-hint">Motsvarar <output id="out-alloc-stocks-kr">3 500 000</output> kr.</p>
+          <p class="field-hint" id="alloc-stocks-pct-hint">Motsvarar 3 500 000 kr.</p>
         </div>
 
         <div class="asset-card">
           <label class="field">
-            <span class="field__label">Ränteportfölj</span>
-            <span class="field__value"><output id="out-alloc-bonds">15</output> %</span>
-            <input type="range" id="alloc-bonds" min="0" max="100" value="15" step="1">
+            <span class="field__label">Räntor</span>
+            <span class="field__value"><output id="out-alloc-bonds-pct">15</output> %</span>
+            <input type="range" id="alloc-bonds-pct" min="0" max="100" value="15" step="1">
           </label>
-          <p class="field-hint">Motsvarar <output id="out-alloc-bonds-kr">750 000</output> kr.</p>
+          <p class="field-hint" id="alloc-bonds-pct-hint">Motsvarar 750 000 kr.</p>
         </div>
 
         <div class="asset-card">
           <label class="field">
             <span class="field__label">Sparkonto</span>
-            <span class="field__value"><output id="out-alloc-savings">15</output> %</span>
-            <input type="range" id="alloc-savings" min="0" max="100" value="15" step="1">
+            <span class="field__value"><output id="out-alloc-savings-pct">15</output> %</span>
+            <input type="range" id="alloc-savings-pct" min="0" max="100" value="15" step="1">
           </label>
-          <p class="field-hint">Motsvarar <output id="out-alloc-savings-kr">750 000</output> kr.</p>
+          <p class="field-hint" id="alloc-savings-pct-hint">Motsvarar 750 000 kr.</p>
         </div>
+
         <p class="field-hint" id="blended-return-hint">Blandad avkastning: 6,9 % nominellt, givet din fördelning ovan.</p>
       </div>
     </div>
@@ -195,13 +224,13 @@
         </label>
 
         <label class="field">
-          <span class="field__label">Förväntad nominell avkastning: Aktie/fondportfölj</span>
+          <span class="field__label">Förväntad nominell avkastning: Aktier/fonder</span>
           <span class="field__value"><output id="out-return-stocks">9</output> %</span>
           <input type="range" id="return-stocks" min="0" max="15" value="9" step="0.1">
         </label>
 
         <label class="field">
-          <span class="field__label">Förväntad nominell avkastning: Ränteportfölj</span>
+          <span class="field__label">Förväntad nominell avkastning: Räntor</span>
           <span class="field__value"><output id="out-return-bonds">3</output> %</span>
           <input type="range" id="return-bonds" min="0" max="10" value="3" step="0.1">
         </label>
@@ -247,13 +276,13 @@
         </label>
 
         <label class="field">
-          <span class="field__label">Skatt på Aktie/fondportfölj (utgår från ISK)</span>
+          <span class="field__label">Skatt på Aktier/fonder (utgår från ISK)</span>
           <span class="field__value"><output id="out-tax-isk-stocks">1,1</output> %</span>
           <input type="range" id="tax-isk-stocks" min="0" max="3" value="1.1" step="0.1">
         </label>
 
         <label class="field">
-          <span class="field__label">Skatt på Ränteportfölj (utgår från ISK)</span>
+          <span class="field__label">Skatt på Räntor (utgår från ISK)</span>
           <span class="field__value"><output id="out-tax-bonds">1,1</output> %</span>
           <input type="range" id="tax-bonds" min="0" max="3" value="1.1" step="0.1">
         </label>
