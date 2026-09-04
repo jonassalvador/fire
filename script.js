@@ -679,58 +679,88 @@ function accumulate(startBuckets, startAge, monthlySavings, params, maxAge) {
 // from there instead, while still reporting the same whole-number age.
 function findFireAge(startBuckets, startAge, monthlySavings, monthlySpend, params, maxAge) {
   const accPath = accumulate(startBuckets, startAge, monthlySavings, params, maxAge);
-  let prevPoint = accPath[0];
 
-  for (let i = 1; i < accPath.length; i++) {
+  // retiring with zero years left before the end age isn't meaningful
+  // readiness — a 0-year decumulation window always trivially "succeeds"
+  // (nothing left to fund), so solveRequiredBalanceBuckets would return ~0
+  // here regardless of actual capital, falsely reporting "redo" right at the
+  // very end age no matter how insufficient the capital really is. accPath's
+  // very last point sits exactly at maxAge, so it's never a valid candidate.
+  const lastCandidate = accPath.length - 2;
+  if (lastCandidate < 1) return null;
+
+  const isReady = i => {
     const point = accPath[i];
-    // retiring with zero years left before the end age isn't meaningful
-    // readiness — a 0-year decumulation window always trivially "succeeds"
-    // (nothing left to fund), so solveRequiredBalanceBuckets would return
-    // ~0 here regardless of actual capital, falsely reporting "redo" right
-    // at the very end age no matter how insufficient the capital really is.
-    if (point.age >= maxAge) break;
-
     const required = solveRequiredBalanceBuckets(monthlySpend, point.age, point, params);
-    if (point.balance >= required) {
-      // accumulate() only checks once a year, so the year readiness is
-      // actually crossed can leave the balance sitting anywhere up to a
-      // full year's growth above the requirement — an artifact of which
-      // month within that year the crossing happened to fall, not a real
-      // difference in outcome. Left uncorrected, that arbitrary "overshoot"
-      // then compounds for the rest of the horizon under Bevara kapitalet,
-      // and a tiny slider nudge that flips which whole year you cross in
-      // can make the reported outcome swing wildly.
-      //
-      // The required threshold itself can also move within that same year
-      // — with pension counted in, retiring one year later needs less
-      // bridge capital, so `required` can be dropping while `balance` is
-      // rising. Rather than approximate both as straight lines (which
-      // doesn't hold up well — the true relationship compounds, it doesn't
-      // move linearly), bisect directly for the fractional age where
-      // capital (linearly interpolated between these two known
-      // accumulation points — the only two data points actually available)
-      // exactly matches the ACTUAL required balance solved fresh at that
-      // same fractional age, now that pensionNetIncomeAt() can prorate a
-      // birthday landing mid-step instead of only ever seeing whole years.
-      const shape = bucketShape(point);
-      const capitalAt = age => prevPoint.balance + (age - prevPoint.age) * (point.balance - prevPoint.balance);
-      const bucketsAt = age => {
-        const bal = capitalAt(age);
-        return { age, balance: bal, stocks: shape.stocks * bal, bonds: shape.bonds * bal, savings: shape.savings * bal };
-      };
-      const gapAt = age => capitalAt(age) - solveRequiredBalanceBuckets(monthlySpend, age, bucketsAt(age), params);
+    return point.balance >= required;
+  };
 
-      let lo = prevPoint.age, hi = point.age;
-      for (let iter = 0; iter < 30; iter++) {
-        const mid = (lo + hi) / 2;
-        if (gapAt(mid) >= 0) hi = mid; else lo = mid;
-      }
-      const crossing = bucketsAt(hi);
-      return { age: point.age, required: crossing.balance, path: accPath.slice(0, i).concat([crossing]) };
-    }
-    prevPoint = point;
+  // Capital only ever grows while the pension "bridge" required only ever
+  // shrinks as retirement age approaches, so once a candidate year is ready
+  // every later one stays ready too — same assumption the old walk already
+  // relied on (it never re-checked later years either, it just stopped at
+  // the first hit). That old walk — one solveRequiredBalanceBuckets() call
+  // per accumulated year up to the crossing — used to be the single biggest
+  // cost in "ready" mode, re-run in full on every slider drag.
+  //
+  // A plain bisection over the whole range fixes the "far off" case (it
+  // costs O(log n) regardless of how many years out the crossing is) but
+  // actually makes the common case worse: most people testing "when am I
+  // ready" are already fairly close, and a walk that stops after only a few
+  // years is cheaper than always paying O(log n) over the entire horizon.
+  // Probing at doubling distances from today, then bisecting only the range
+  // that doubling landed in, gets the best of both — a close crossing is
+  // still found in just a couple of calls, like the walk always managed,
+  // while a far-off one still costs only O(log k) instead of O(k).
+  if (!isReady(lastCandidate)) return null;
+
+  let probe = 1;
+  while (probe < lastCandidate && !isReady(probe)) probe *= 2;
+  let hi = Math.min(probe, lastCandidate);
+  let lo = Math.floor(hi / 2);
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (isReady(mid)) hi = mid; else lo = mid + 1;
   }
-  return null;
+  const i = lo;
+  const point = accPath[i];
+  const prevPoint = accPath[i - 1];
+
+  // accumulate() only checks once a year, so the year readiness is actually
+  // crossed can leave the balance sitting anywhere up to a full year's
+  // growth above the requirement — an artifact of which month within that
+  // year the crossing happened to fall, not a real difference in outcome.
+  // Left uncorrected, that arbitrary "overshoot" then compounds for the rest
+  // of the horizon under Bevara kapitalet, and a tiny slider nudge that
+  // flips which whole year you cross in can make the reported outcome swing
+  // wildly.
+  //
+  // The required threshold itself can also move within that same year —
+  // with pension counted in, retiring one year later needs less bridge
+  // capital, so `required` can be dropping while `balance` is rising. Rather
+  // than approximate both as straight lines (which doesn't hold up well —
+  // the true relationship compounds, it doesn't move linearly), bisect
+  // directly for the fractional age where capital (linearly interpolated
+  // between these two known accumulation points — the only two data points
+  // actually available) exactly matches the ACTUAL required balance solved
+  // fresh at that same fractional age, now that pensionNetIncomeAt() can
+  // prorate a birthday landing mid-step instead of only ever seeing whole
+  // years.
+  const shape = bucketShape(point);
+  const capitalAt = age => prevPoint.balance + (age - prevPoint.age) * (point.balance - prevPoint.balance);
+  const bucketsAt = age => {
+    const bal = capitalAt(age);
+    return { age, balance: bal, stocks: shape.stocks * bal, bonds: shape.bonds * bal, savings: shape.savings * bal };
+  };
+  const gapAt = age => capitalAt(age) - solveRequiredBalanceBuckets(monthlySpend, age, bucketsAt(age), params);
+
+  let loAge = prevPoint.age, hiAge = point.age;
+  for (let iter = 0; iter < 30; iter++) {
+    const mid = (loAge + hiAge) / 2;
+    if (gapAt(mid) >= 0) hiAge = mid; else loAge = mid;
+  }
+  const crossing = bucketsAt(hiAge);
+  return { age: point.age, required: crossing.balance, path: accPath.slice(0, i).concat([crossing]) };
 }
 
 // ---------- Chart ----------
@@ -1055,8 +1085,24 @@ function recalculate() {
 
 // ---------- Wire up live updates ----------
 
+// Dragging a range slider can fire far more 'input' events than the browser
+// actually paints frames — Safari in particular — so running the full
+// recalculate() (chart redraw included) on every single one just piles up
+// work the user never sees a frame of. Coalescing to at most once per
+// animation frame keeps the UI visually in sync with the drag without ever
+// doing more than one recalculation per paint.
+let recalcScheduled = false;
+function scheduleRecalculate() {
+  if (recalcScheduled) return;
+  recalcScheduled = true;
+  requestAnimationFrame(() => {
+    recalcScheduled = false;
+    recalculate();
+  });
+}
+
 document.querySelectorAll('input[type="range"], select, input[type="checkbox"]').forEach(el => {
-  el.addEventListener('input', recalculate);
+  el.addEventListener('input', scheduleRecalculate);
 });
 
 updateVisibility();
