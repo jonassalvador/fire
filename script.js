@@ -486,9 +486,41 @@ function snapToStep(value, min, max, step) {
 }
 
 document.querySelectorAll('.field input[type="range"]').forEach(input => {
+  // Two extra, purely defensive layers against the same jump reappearing
+  // yet again after tapping fast or dragging into a scroll — both a sign
+  // that some native default action is still reaching the input, later
+  // and through a different path than the pointerdown this all runs from.
+  // preventDefault() on a touch-sourced pointerdown is supposed to also
+  // suppress the compatibility mouse events (mousedown/click) a browser
+  // fires afterward for the same touch, and Safari specifically still
+  // dispatches the older, separate Touch Events (touchstart etc.)
+  // alongside Pointer Events for the same physical touch, each with its
+  // own independent default action — either one not actually being
+  // suppressed here would look exactly like this: fine most of the time,
+  // then an occasional native jump slips through anyway. Not verifiable
+  // on a real device from here, so this errs toward blocking defaults
+  // more aggressively than assuming pointerdown's own preventDefault was
+  // enough on every engine.
+  input.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+  let touchGuardActive = false;
+  function guardAgainstCompatibilityEvent(e) {
+    if (!touchGuardActive) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  input.addEventListener('mousedown', guardAgainstCompatibilityEvent);
+  input.addEventListener('click', guardAgainstCompatibilityEvent);
+
   input.addEventListener('pointerdown', e => {
     if (e.pointerType !== 'touch') return;
     e.preventDefault(); // stop the native jump-to-touch-point
+    // armed for a short window after every touch pointerdown (see the two
+    // listeners and their own comment above) — self-clears either the
+    // moment a compatibility event actually shows up, or on this timeout
+    // if none ever does, so it can never get stuck blocking some later,
+    // genuinely unrelated interaction.
+    touchGuardActive = true;
+    setTimeout(() => { touchGuardActive = false; }, 500);
     // deliberately not calling input.focus() here (preventDefault also
     // suppresses the native focus a touch would otherwise cause) — tried
     // that, and a light blue focus ring started showing on every
