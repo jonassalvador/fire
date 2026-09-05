@@ -44,6 +44,10 @@ document.querySelectorAll('.field-group__header').forEach(header => {
     const expanded = header.getAttribute('aria-expanded') === 'true';
     header.setAttribute('aria-expanded', String(!expanded));
     document.getElementById(header.getAttribute('aria-controls')).classList.toggle('is-open', !expanded);
+    // this specific toggle has no other recalculate() call following it
+    // (unlike every switch-driven reveal elsewhere) to otherwise trigger
+    // this on its own.
+    updateSliderThumbVisuals();
 
     const start = performance.now();
     function pinScroll(now) {
@@ -116,6 +120,10 @@ window.addEventListener('resize', updateTabLayout);
 if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(updateTabLayout);
 }
+
+// track width (and so every slider thumb visual's x position) can change
+// on resize too.
+window.addEventListener('resize', () => updateSliderThumbVisuals());
 
 modeTabs.forEach(tab => {
   tab.addEventListener('click', () => {
@@ -370,6 +378,118 @@ function fireLevelFor(spend) {
   return level;
 }
 
+// ---------- Slider thumb visual overlay ----------
+// Real Mobile Safari has a well-documented, long-standing bug where a
+// custom ::-webkit-slider-thumb clips its OWN box-shadow/filter to its own
+// plain layout box — and unlike the usual ancestor-overflow clipping this
+// project has fixed elsewhere with bleed margins, nothing done TO the
+// thumb itself ever stopped it: neither switching box-shadow for filter,
+// nor growing the room available well past it, nor removing a transform
+// suspected of promoting it onto its own layer (all tried, all reported
+// back as still clipped). That points at something more basic than a CSS
+// property on the native thumb can fix — iOS appears to always composite
+// a native form control's pseudo-element through its own fixed-size
+// internal buffer, clipping anything painted past its own bounds no
+// matter what. The only reliable way around a native-control rendering
+// limit like that is to stop drawing on the native control at all: the
+// real thumb (below) becomes fully invisible but keeps its real size, so
+// the actual drag hit-area is unchanged, and this plain sibling <span> is
+// drawn on top instead, positioned here in JS to track it exactly. A
+// plain span isn't a native control, so its box-shadow can't hit this bug
+// — and it's still subject to ordinary, well-behaved ancestor
+// overflow:hidden clipping, so the bleed margins already in place for
+// that (see .field-group__content-inner/.expand-collapse-inner) can
+// finally do their job for the shadow too.
+document.querySelectorAll('.field input[type="range"]').forEach(input => {
+  const visual = document.createElement('span');
+  visual.className = 'slider-thumb-visual';
+  visual.setAttribute('aria-hidden', 'true');
+  visual.innerHTML = '<span class="slider-thumb-visual__dot"></span>';
+  input.insertAdjacentElement('afterend', visual);
+});
+
+// Positioned in the same coordinate space .field itself establishes (see
+// its position:relative in style.css) using the exact center-of-value
+// formula already verified (via a reference line, at both track ends) to
+// match how the browser itself places the real, now-invisible thumb — so
+// the fake one lands exactly on top of it. No transition on left/top: a
+// dragged thumb has to track the finger 1:1, not ease toward it.
+function updateSliderThumbVisuals() {
+  document.querySelectorAll('.field input[type="range"]').forEach(input => {
+    const visual = input.nextElementSibling;
+    if (!visual || !visual.classList.contains('slider-thumb-visual')) return;
+    // hidden (a closed section, or a mode-hidden field on another tab) —
+    // getBoundingClientRect() would read all zeros; skip rather than
+    // snapping the visual to a wrong position it'd otherwise show
+    // instantly once revealed.
+    if (input.offsetParent === null) return;
+    const field = input.closest('.field');
+    const fieldRect = field.getBoundingClientRect();
+    const inputRect = input.getBoundingClientRect();
+    const min = +input.min || 0, max = +input.max || 100, val = +input.value;
+    const pct = max > min ? (val - min) / (max - min) : 0;
+    visual.style.left = `${inputRect.left - fieldRect.left + pct * inputRect.width}px`;
+    visual.style.top = `${inputRect.top - fieldRect.top + inputRect.height / 2}px`;
+  });
+}
+
+// A native range input jumps straight to wherever you press, then drags
+// from there — precise with a mouse, but a finger is wide enough that a
+// touch meant to grab-and-adjust from the current value often lands a
+// little off and yanks the value with it. This replaces that, touch only
+// (event.pointerType — a mouse or pen press is untouched, since a jump-to
+// click is exactly the precise, expected behavior there): press anywhere
+// on a slider and drag by feel from wherever the finger actually is,
+// moving the value by the same distance the finger moves, rather than
+// snapping it to the touch point first.
+function snapToStep(value, min, max, step) {
+  const stepped = min + Math.round((value - min) / step) * step;
+  // step is sometimes fractional (0.1, 0.25) — round off the float noise
+  // that dividing/multiplying by those introduces (e.g. 0.30000000000000004)
+  // to whatever precision the step itself is expressed in.
+  const decimals = (String(step).split('.')[1] || '').length;
+  return Math.min(max, Math.max(min, +stepped.toFixed(decimals)));
+}
+
+document.querySelectorAll('.field input[type="range"]').forEach(input => {
+  input.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch') return;
+    e.preventDefault(); // stop the native jump-to-touch-point
+    input.focus(); // preventDefault also suppresses the native focus that would otherwise follow
+    // keeps tracking even if the finger slides outside the track — wrapped
+    // defensively since a pointerId the browser doesn't recognize as an
+    // active pointer throws here (confirmed directly: an uncaught
+    // NotFoundError from this exact call silently skipped the rest of the
+    // handler below, including attaching the move/up listeners, so the
+    // drag did nothing at all) rather than failing gracefully. A real
+    // touch's own pointerId should never hit that, but there's no reason
+    // to let the whole gesture ride on it regardless.
+    try { input.setPointerCapture(e.pointerId); } catch {}
+
+    const min = +input.min || 0, max = +input.max || 100, step = +input.step || 1;
+    const trackWidth = input.getBoundingClientRect().width;
+    const startValue = +input.value;
+    const startX = e.clientX;
+
+    function onMove(moveEvent) {
+      const deltaValue = ((moveEvent.clientX - startX) / trackWidth) * (max - min);
+      const next = snapToStep(startValue + deltaValue, min, max, step);
+      if (next !== +input.value) {
+        input.value = next;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+    function onUp() {
+      input.removeEventListener('pointermove', onMove);
+      input.removeEventListener('pointerup', onUp);
+      input.removeEventListener('pointercancel', onUp);
+    }
+    input.addEventListener('pointermove', onMove);
+    input.addEventListener('pointerup', onUp);
+    input.addEventListener('pointercancel', onUp);
+  });
+});
+
 // Lysa-trial: paints each range input's own filled progress portion (in the
 // accent gradient) up to its current value, with a hard cutoff to the plain
 // track color right after — the reference artboard's `.track-fill`, done
@@ -455,6 +575,7 @@ function syncDisplays() {
   updateAllocationDisplay();
   updateSliderFills();
   updateToggleIndicators();
+  updateSliderThumbVisuals();
 }
 
 // ---------- Simulation engine ----------

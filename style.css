@@ -321,7 +321,7 @@ body {
    rather than adapted. */
 .field-group {
   background: var(--paper-raised);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 28px;
   margin-bottom: 20px;
 }
@@ -530,7 +530,7 @@ body {
    instead — reusing the same subtle ink wash the pill switches sit on. */
 .field-group__header:active::before {
   background: rgba(40, 42, 45, 0.06);
-  border-radius: 12px;
+  border-radius: 16px;
 }
 
 /* collapsed: nothing else is in this card, so the same reach as the top
@@ -561,6 +561,17 @@ body {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px 12px;
   margin-bottom: 32px;
+  /* positions .slider-thumb-visual below, relative to this field's own
+     box — see the long comment on that rule for why a plain sibling span
+     draws the thumb instead of the real (now invisible) one. */
+  position: relative;
+  --thumb-size: 20px;
+}
+
+@media (pointer: coarse) {
+  .field {
+    --thumb-size: 26px;
+  }
 }
 
 .field:last-child { margin-bottom: 0; }
@@ -631,153 +642,87 @@ body {
   margin-top: 6px;
 }
 
-/* active (pressed/dragging) grows the thumb via transform: scale() rather
-   than changing width/height directly. That width/height approach was
-   tried first and looked fine at a glance, but broke under closer,
-   position-specific testing: with the thumb positioned near the LEFT end
-   of the track (not the middle, which is where it was originally checked),
-   growing width/height visibly shifted the whole box to the right instead
-   of growing evenly from its own center — and the mirror image happens
-   near the right end (confirmed directly, in this same tool, with a
-   reference line at the track's exact mathematical value-position: the
-   line stayed centered on the thumb at rest, then landed off to one side
-   the instant the width/height grew). transform: scale() doesn't have this
-   problem, because it's a pure paint-time effect applied after layout —
-   the browser positions the (always-static-sized) box first, using
-   whatever its own internal slider math is, and the scale just stretches
-   that already-correctly-placed box around its own center afterward,
-   wherever on the track that happens to be. The trade-off is the 3px
-   border scales up with it too (~20% thicker at the 1.2x used here)
-   instead of staying pixel-constant — accepted deliberately, since a
-   slightly thicker ring while pressed reads far better than the thumb
-   visibly drifting toward one edge of the track.
-   No margin-top is needed to vertically center the (static, unscaled) box
-   on the track either — verified directly (a reference line at the
-   track's exact mathematical center, at the 20/26px static sizes actually
-   used): Chrome/Blink already vertically centers a custom-sized thumb by
-   default, and an earlier attempt at a margin-top compensation was
-   throwing that off, not fixing it — confirmed there, in this same tool,
-   and left alone here. A LATER attempt added a margin-top back again,
-   gated behind an @supports(-webkit-touch-callout:none) check, on the
-   theory that Safari specifically doesn't auto-center the way Blink does
-   — that was never verified on a real device (this tool can't load
-   Safari), and real-device feedback afterward said the phone thumb was no
-   longer centered, i.e. this second margin-top attempt was ALSO wrong and
-   has been removed again. Two separate margin-top attempts have now made
-   things worse rather than better — treat a third as suspect by default.
-   Hover no longer resizes the thumb (a resize-on-hover is indistinguishable
-   from resize-on-press on a touchscreen, since touch fires both at once) —
-   it shifts to a color-only change instead, matching the hover treatment
-   used everywhere else (tabs, switches). The rest-state shadow is a real,
-   intentional box-shadow rather than relying on any browser's own default
-   touch-highlight rendering (that default does show something shadow-like
-   on some mobile browsers, but it's not present on desktop and isn't
-   reliable enough to depend on) — transform: scale() carries the shadow
-   along proportionally too, which just reads as it deepening slightly
-   under press, not a bug. A touch pointer also gets a bigger static thumb
-   across the board — the thumb's rendered size is its entire hit area on a
-   native range input, and 20px was proving hard to reliably grab with a
-   fingertip. */
+@media (pointer: coarse) {
+  /* the browser's own touch-to-scroll/zoom gesture recognition otherwise
+     competes with the custom touch-drag handling in script.js (a
+     pointerdown there calls preventDefault(), replacing the native
+     jump-then-drag entirely with a relative, grab-from-wherever drag) —
+     without this, a touch that isn't perfectly horizontal risks being
+     read as a page-scroll attempt instead. Fine/mouse pointers keep the
+     default, native jump-to-click behavior untouched, so they don't need
+     this either. */
+  .field input[type="range"] {
+    touch-action: none;
+  }
+}
+
+/* The real native thumb is fully invisible now — see the long comment on
+   .slider-thumb-visual in script.js for why (a real, long-standing Mobile
+   Safari bug clips a custom ::-webkit-slider-thumb's own box-shadow/filter
+   to its own plain box, and nothing done TO the thumb itself, across
+   several different attempts, ever stopped it). It keeps its real size
+   (--thumb-size, shared with the visible dot below via .field, so the
+   drawn circle and the actual drag target always match) purely so the
+   drag hit-area is unchanged; opacity is the only thing that changes. */
 .field input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  --thumb-size: 20px;
   width: var(--thumb-size);
   height: var(--thumb-size);
   border-radius: 50%;
-  background: var(--paper-raised);
-  border: 3px solid var(--accent);
-  /* filter: drop-shadow(), not box-shadow — real Mobile Safari has a known,
-     long-standing bug where box-shadow silently fails to paint on a
-     ::-webkit-slider-thumb specifically (the pseudo-element renders as a
-     native, separately-composited control layer there, and box-shadow
-     doesn't reach it), even though the exact same box-shadow renders fine
-     everywhere else, this tool's Blink included. drop-shadow operates on
-     the thumb's actual painted pixels rather than through that box-model
-     shadow layer, so it isn't affected by that quirk. */
-  filter: drop-shadow(0 1px 3px rgba(22, 23, 24, 0.15)) drop-shadow(0 1px 2px rgba(22, 23, 24, 0.1));
+  opacity: 0;
   cursor: pointer;
-  /* no transform at rest — an explicit transform: scale(1) sat here for a
-     while, purely as a same-property starting point for the :active
-     transform to transition from. It's very likely what caused the
-     drop-shadow above to get clipped hard against the thumb's own edges on
-     a real iPhone (reported back as cut off well before any surrounding
-     ancestor's own edge, which ruled out overflow:hidden on some ancestor
-     as the cause): a transform, even the identity one, can make a browser
-     promote the element onto its own composited layer, and that layer's
-     bounds — sized to the thumb's own plain box, not the drop-shadow's
-     bigger visual footprint — became the thing actually doing the
-     clipping. Removing it doesn't need a matching fix on the :active
-     transition below: animating from no transform at all to
-     transform: scale(1.2) interpolates exactly the same way animating
-     from scale(1) would (both are the identity transform as a starting
-     value), so nothing about the press animation itself changes. */
-  transition: transform 0.15s ease, border-color 0.15s ease, filter 0.15s ease;
 }
 
-@media (pointer: coarse) {
-  .field input[type="range"]::-webkit-slider-thumb {
-    --thumb-size: 26px;
-  }
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .field input[type="range"]:hover::-webkit-slider-thumb {
-    /* a brightening of the ring itself, not a fill-color change — two
-       earlier fill attempts (translucent gray, then solid gray) both read
-       as competing with the border instead of one ring lighting up. A
-       third attempt stacked an extra blue drop-shadow glow on top of the
-       two rest-state ones for more of a "lighting up" effect, but that
-       misbehaved in real Safari (stacking multiple drop-shadow() filter
-       functions, especially on a native-control pseudo-element mid
-       :hover-triggered transition, is a known rough edge there) — reduced
-       back to just the border-color change, which has none of that
-       cross-function-filter surface area. */
-    border-color: var(--accent-end);
-  }
-}
-
-.field input[type="range"]:active::-webkit-slider-thumb {
-  transform: scale(1.2);
-}
-
-/* Firefox centers a custom -moz-range-thumb on the track automatically, so
-   this doesn't need (and shouldn't get) the margin-top hack above. Same
-   transform: scale() reasoning as the -webkit- block above applies here
-   too — not separately verified in Firefox (this tool can't load it), but
-   there's no reason to assume Firefox's internal slider-position math is
-   any less indifferent to a paint-time transform than Blink's, and
-   width/height was the one already confirmed to break in Blink. */
 .field input[type="range"]::-moz-range-thumb {
-  --thumb-size: 20px;
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  border-radius: 50%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* the visible stand-in for the thumb above — a plain span, positioned in
+   script.js (updateSliderThumbVisuals()) to sit exactly on top of the
+   real, invisible one. pointer-events: none so every actual press/drag
+   still goes to the real input underneath; its own hover/hover-adjacent
+   and active states below are driven off THAT input's, via the adjacent-
+   sibling selector, for the same reason. */
+.slider-thumb-visual {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.slider-thumb-visual__dot {
+  display: block;
   width: var(--thumb-size);
   height: var(--thumb-size);
   border-radius: 50%;
   background: var(--paper-raised);
   border: 3px solid var(--accent);
-  /* filter, not box-shadow — see the long comment on the -webkit- rule
-     above; Firefox has no such bug, but there's no reason for this one to
-     diverge from that one's approach. */
-  filter: drop-shadow(0 1px 3px rgba(22, 23, 24, 0.15)) drop-shadow(0 1px 2px rgba(22, 23, 24, 0.1));
-  cursor: pointer;
-  /* no transform at rest — see the -webkit- rule's own comment for why. */
-  transition: transform 0.15s ease, border-color 0.15s ease, filter 0.15s ease;
-}
-
-@media (pointer: coarse) {
-  .field input[type="range"]::-moz-range-thumb {
-    --thumb-size: 26px;
-  }
+  /* a plain box-shadow works fine here — this is an ordinary element, not
+     a native form control, so it was never subject to the Safari bug the
+     old filter: drop-shadow() on the real thumb was worked around for. It
+     IS still subject to normal ancestor overflow:hidden clipping (as any
+     regular element's box-shadow should be), which is exactly why the
+     bleed margins on .field-group__content-inner/.expand-collapse-inner
+     can finally do their job for it. */
+  box-shadow: 0 1px 3px rgba(22, 23, 24, 0.15), 0 1px 2px rgba(22, 23, 24, 0.1);
+  transition: border-color 0.15s ease, transform 0.15s ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .field input[type="range"]:hover::-moz-range-thumb {
-    /* same border-only brightening as the -webkit- rule above — see its
-       comment for why the glow this used to add on top was dropped. */
+  /* a brightening of the ring itself, not a fill-color change — earlier
+     fill attempts (translucent gray, then solid gray) both read as
+     competing with the border instead of one ring lighting up, and a
+     glow layered on top of that misbehaved in real Safari. */
+  .field input[type="range"]:hover + .slider-thumb-visual .slider-thumb-visual__dot {
     border-color: var(--accent-end);
   }
 }
 
-.field input[type="range"]:active::-moz-range-thumb {
+.field input[type="range"]:active + .slider-thumb-visual .slider-thumb-visual__dot {
   transform: scale(1.2);
 }
 
@@ -936,7 +881,7 @@ body {
 
 .panel--result {
   background: var(--paper-raised);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 40px;
 }
 
@@ -946,7 +891,7 @@ body {
 
 .comparison-box {
   background: var(--paper-raised);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 40px;
 }
 
