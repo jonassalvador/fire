@@ -415,6 +415,19 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
   visual.setAttribute('aria-hidden', 'true');
   visual.innerHTML = '<span class="slider-thumb-visual__dot"></span>';
   input.insertAdjacentElement('afterend', visual);
+  // see the touch-drag section further down for what this is and why —
+  // added here, next to the visual overlay it's positioned identically
+  // to, rather than there, purely so every element this file adds to a
+  // .field gets created in one place. Inserted after the visual overlay
+  // specifically (not straight after input a second time), so that
+  // updateSliderThumbVisuals()'s own input.nextElementSibling lookup for
+  // the visual overlay keeps working unchanged — a second insert
+  // "afterend" of input would otherwise land between input and visual,
+  // not after both.
+  const touchTarget = document.createElement('span');
+  touchTarget.className = 'slider-touch-target';
+  touchTarget.setAttribute('aria-hidden', 'true');
+  visual.insertAdjacentElement('afterend', touchTarget);
 });
 
 // A native thumb's CENTER travels the track's full width — at min, the
@@ -441,11 +454,13 @@ function getThumbRadius(input) {
 function updateSliderThumbVisuals() {
   document.querySelectorAll('.field input[type="range"]').forEach(input => {
     const visual = input.nextElementSibling;
+    const touchTarget = visual && visual.nextElementSibling;
     if (!visual || !visual.classList.contains('slider-thumb-visual')) return;
+    if (!touchTarget || !touchTarget.classList.contains('slider-touch-target')) return;
     // hidden (a closed section, or a mode-hidden field on another tab) —
     // getBoundingClientRect() would read all zeros; skip rather than
-    // snapping the visual to a wrong position it'd otherwise show
-    // instantly once revealed.
+    // snapping either to a wrong position they'd otherwise show instantly
+    // once revealed.
     if (input.offsetParent === null) return;
     const field = input.closest('.field');
     const fieldRect = field.getBoundingClientRect();
@@ -454,28 +469,55 @@ function updateSliderThumbVisuals() {
     const pct = max > min ? (val - min) / (max - min) : 0;
     const radius = getThumbRadius(input);
     const x = inputRect.left - fieldRect.left + radius + pct * (inputRect.width - 2 * radius);
+    const centerY = inputRect.top - fieldRect.top + inputRect.height / 2;
     visual.style.left = `${x}px`;
-    visual.style.top = `${inputRect.top - fieldRect.top + inputRect.height / 2}px`;
+    visual.style.top = `${centerY}px`;
+
+    // spans the input's own full width (every point along the track needs
+    // to remain tappable, not just where the thumb happens to be), but
+    // taller than its plain 6px height — a comfortable tap target, per
+    // Apple's own 44px HIG minimum, rather than exactly as thin as the
+    // visible line.
+    const touchTargetHeight = 44;
+    touchTarget.style.left = `${inputRect.left - fieldRect.left}px`;
+    touchTarget.style.top = `${centerY - touchTargetHeight / 2}px`;
+    touchTarget.style.width = `${inputRect.width}px`;
+    touchTarget.style.height = `${touchTargetHeight}px`;
   });
 }
 
 // A native range input jumps straight to wherever you press, then drags
 // from there — precise with a mouse, but a finger is wide enough that a
 // touch meant to grab-and-adjust from the current value often lands a
-// little off and yanks the value with it. Worse, that jump turned out to
-// still be reachable on touch even with a full relative-drag replacement
-// in place and reattached to window for reliability (reported back as
-// still happening occasionally) — some path back to the native
-// jump-then-drag was evidently still open on a real device this tool
-// can't fully reproduce or rule out. Rather than keep chasing that,
-// touches (event.pointerType — a mouse or pen press is untouched, since a
-// jump-to-click is exactly the precise, expected behavior there) now
-// split into two kinds that are each individually incapable of ever
-// producing a jump, instead of one kind that's supposed to avoid it:
-// starting the touch ON the handle itself drags it, by feel, exactly as
-// before; starting anywhere else on the track nudges the value by exactly
-// one step toward that side and does nothing else — never an absolute
-// position, so there's no jump left to happen either way.
+// little off and yanks the value with it. Several rounds of trying to
+// intercept and override that on the real input itself (preventDefault on
+// pointerdown, then also on the legacy touchstart event, then also
+// guarding the mousedown/click a browser fires afterward as touch
+// compatibility events, then guarding against this code's OWN listeners
+// leaking and misfiring on a later touch) all reduced how often a jump
+// could still slip through, but never actually to zero — it kept getting
+// reported back as still happening, most noticeably near the two ends of
+// a track specifically. That last detail is the actual reason: the
+// visible thumb (below) uses an INSET position model so it never bleeds
+// outside the track's own ends, but the real native thumb underneath it
+// still uses the browser's own CENTER model, which does — and those two
+// models coincide exactly at the middle of a track and diverge by a full
+// thumb-radius at each end. Whenever the native default this was all
+// trying to intercept still fired anyway — apparently on a real device,
+// occasionally, no matter how many of its trigger paths got pre-empted —
+// the jump it produced used that native center math, not this file's
+// inset one, so it was small and easy to miss near the middle and glaring
+// right at the ends. Rather than keep closing off individual paths to a
+// default this can't fully enumerate, the real input is now unreachable
+// by touch at all: .slider-touch-target (a plain, invisible sibling span,
+// sized and positioned exactly over the real input) is the thing touches
+// actually land on and every listener below is attached to, while the
+// real input drops pointer-events entirely for coarse pointers (see
+// style.css) and simply can't receive a touch-originated event to have a
+// default for in the first place. It still starts a drag exactly like the
+// input used to when the touch lands on the handle, and nudges the value
+// by one step otherwise — nothing here changes except which element the
+// touch is actually happening to.
 function snapToStep(value, min, max, step) {
   const stepped = min + Math.round((value - min) / step) * step;
   // step is sometimes fractional (0.1, 0.25) — round off the float noise
@@ -486,78 +528,23 @@ function snapToStep(value, min, max, step) {
 }
 
 document.querySelectorAll('.field input[type="range"]').forEach(input => {
-  // Two extra, purely defensive layers against the same jump reappearing
-  // yet again after tapping fast or dragging into a scroll — both a sign
-  // that some native default action is still reaching the input, later
-  // and through a different path than the pointerdown this all runs from.
-  // preventDefault() on a touch-sourced pointerdown is supposed to also
-  // suppress the compatibility mouse events (mousedown/click) a browser
-  // fires afterward for the same touch, and Safari specifically still
-  // dispatches the older, separate Touch Events (touchstart etc.)
-  // alongside Pointer Events for the same physical touch, each with its
-  // own independent default action — either one not actually being
-  // suppressed here would look exactly like this: fine most of the time,
-  // then an occasional native jump slips through anyway. Not verifiable
-  // on a real device from here, so this errs toward blocking defaults
-  // more aggressively than assuming pointerdown's own preventDefault was
-  // enough on every engine.
-  input.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
-  let touchGuardActive = false;
-  function guardAgainstCompatibilityEvent(e) {
-    if (!touchGuardActive) return;
-    e.preventDefault();
-    e.stopPropagation();
-  }
-  input.addEventListener('mousedown', guardAgainstCompatibilityEvent);
-  input.addEventListener('click', guardAgainstCompatibilityEvent);
+  const visual = input.nextElementSibling;
+  const touchTarget = visual.nextElementSibling;
 
   // tracks the in-progress drag's own window listeners, if any, so a new
   // touch can forcibly tear down a previous one that never cleaned up
-  // after itself — see the pointerdown handler below for why that can
-  // happen and what it looks like when it does.
+  // after itself (observed as possible under fast repeated taps, or a
+  // drag interrupted mid-gesture) before starting anything of its own —
+  // otherwise the old one stays attached to window forever, and if a
+  // later touch happens to reuse the same pointerId, it fires again using
+  // its own long-stale start position instead of the new touch's real one.
   let endActiveDrag = null;
 
-  input.addEventListener('pointerdown', e => {
-    if (e.pointerType !== 'touch') return;
-    // if a previous drag's own pointerup/pointercancel never fired —
-    // plausible under fast repeated taps, or a drag that gets interrupted
-    // mid-gesture by the page attempting to scroll instead — its onMove/
-    // onUp closures stay attached to window forever, each still watching
-    // for its own original pointerId. Touch pointerIds can get reused for
-    // a later, entirely new touch, and if that happens, the stale
-    // listener fires anyway, moving the value by a delta measured against
-    // its own long-stale start position instead of this new touch's real
-    // one — which looks exactly like an unexplained jump, and was
-    // reported back as still happening after this same bug's more likely
-    // causes (native compatibility events) were already guarded against.
-    // Tearing down whatever the previous gesture left behind before this
-    // one starts anything of its own closes that off regardless of
-    // whether that theory is actually what's happening on a real device.
+  touchTarget.addEventListener('pointerdown', e => {
     if (endActiveDrag) {
       endActiveDrag();
       endActiveDrag = null;
     }
-    e.preventDefault(); // stop the native jump-to-touch-point
-    // armed for a short window after every touch pointerdown (see the two
-    // listeners and their own comment above) — self-clears either the
-    // moment a compatibility event actually shows up, or on this timeout
-    // if none ever does, so it can never get stuck blocking some later,
-    // genuinely unrelated interaction.
-    touchGuardActive = true;
-    setTimeout(() => { touchGuardActive = false; }, 500);
-    // deliberately not calling input.focus() here (preventDefault also
-    // suppresses the native focus a touch would otherwise cause) — tried
-    // that, and a light blue focus ring started showing on every
-    // touch-drag as a result. It's not just a matter of hiding that ring
-    // conditionally either: it comes from :focus-visible matching a
-    // script-called .focus() here just as much as it matches real
-    // keyboard focus (checked directly), so there's no reliable way to
-    // target "the ring from this specific call" and leave real keyboard
-    // focus styling intact. Simplest fix is to just not focus the control
-    // from a touch at all — genuine Tab-key focus (unrelated to this
-    // handler) still works normally, and still gets a real indicator, on
-    // the visible dot itself (see :focus-visible + .slider-thumb-visual in
-    // style.css).
 
     const min = +input.min || 0, max = +input.max || 100, step = +input.step || 1;
     const inputRect = input.getBoundingClientRect();
@@ -585,31 +572,27 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
     }
 
     // best-effort — wrapped defensively since a pointerId the browser
-    // doesn't recognize as an active pointer throws here (confirmed
-    // directly: an uncaught NotFoundError from this exact call silently
-    // skipped the rest of the handler below at the time, before move/up
-    // were moved to window as they are now). Not load-bearing any more
-    // either way (see below), so a failure here has nothing to cascade
-    // into.
-    try { input.setPointerCapture(e.pointerId); } catch {}
+    // doesn't recognize as an active pointer throws here. Not load-bearing
+    // either way (see below), so a failure here has nothing to cascade into.
+    try { touchTarget.setPointerCapture(e.pointerId); } catch {}
+    // stands in for :active on the real input, which a touch can no
+    // longer trigger at all now that pointer-events is off there — see
+    // the matching .slider-thumb-visual.is-pressed rule in style.css.
+    visual.classList.add('is-pressed');
 
     const trackWidth = inputRect.width;
     const startValue = val;
     const startX = e.clientX;
     const pointerId = e.pointerId;
 
-    // move/up listen on window, not input — confirmed directly this
-    // matters: dragging off the input's own (6px-tall) box occasionally
-    // left it not receiving pointermove/pointerup at all (pointer capture
-    // not reliably keeping events routed there once the finger drifts far
-    // enough vertically), so this handler's own move/up cleanup never ran
-    // — leaving the touch's eventual release to fall through to the
-    // browser's native default after all, jumping the value to wherever
-    // the finger ended up. Listening on window instead means the drag
-    // keeps working (and still ends cleanly) no matter where on screen the
-    // finger actually is for the rest of the gesture; the pointerId check
-    // keeps this from reacting to an unrelated second touch elsewhere on
-    // the page in the meantime.
+    // move/up listen on window, not touchTarget — dragging off its own box
+    // occasionally left it not receiving pointermove/pointerup at all
+    // (pointer capture not reliably keeping events routed there once the
+    // finger drifts far enough), so this handler's own cleanup never ran.
+    // Listening on window instead means the drag keeps working (and still
+    // ends cleanly) no matter where on screen the finger actually is for
+    // the rest of the gesture; the pointerId check keeps this from
+    // reacting to an unrelated second touch elsewhere on the page.
     function onMove(moveEvent) {
       if (moveEvent.pointerId !== pointerId) return;
       const deltaValue = ((moveEvent.clientX - startX) / trackWidth) * (max - min);
@@ -623,6 +606,7 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      visual.classList.remove('is-pressed');
       endActiveDrag = null;
     }
     function onUp(upEvent) {

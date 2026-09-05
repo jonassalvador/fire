@@ -663,16 +663,17 @@ body {
 }
 
 @media (pointer: coarse) {
-  /* the browser's own touch-to-scroll/zoom gesture recognition otherwise
-     competes with the custom touch-drag handling in script.js (a
-     pointerdown there calls preventDefault(), replacing the native
-     jump-then-drag entirely with a relative, grab-from-wherever drag) —
-     without this, a touch that isn't perfectly horizontal risks being
-     read as a page-scroll attempt instead. Fine/mouse pointers keep the
-     default, native jump-to-click behavior untouched, so they don't need
-     this either. */
+  /* the real input can't be touched at all any more — see the long
+     comment in script.js above where .slider-touch-target's own listeners
+     are attached for the full reasoning. pointer-events: none is what
+     actually enforces that (a touch landing where the input visually is
+     now hits .slider-touch-target instead, since it's stacked on top);
+     everything else here just follows from that no longer mattering for
+     touch specifically. Fine/mouse pointers are completely untouched —
+     the input keeps its default pointer-events and native
+     jump-to-click-then-drag exactly as it always did. */
   .field input[type="range"] {
-    touch-action: none;
+    pointer-events: none;
   }
 }
 
@@ -726,15 +727,47 @@ body {
 
 /* the visible stand-in for the thumb above — a plain span, positioned in
    script.js (updateSliderThumbVisuals()) to sit exactly on top of the
-   real, invisible one. pointer-events: none so every actual press/drag
-   still goes to the real input underneath; its own hover/hover-adjacent
-   and active states below are driven off THAT input's, via the adjacent-
-   sibling selector, for the same reason. */
+   real, invisible one. pointer-events: none so a MOUSE press/drag still
+   goes to the real input underneath (its own hover/active/focus-visible
+   states below are driven off THAT input's, via the adjacent-sibling
+   selector, for that reason) — touch has its own separate, actually
+   interactive element for this, see .slider-touch-target below. */
 .slider-thumb-visual {
   position: absolute;
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 1;
+}
+
+/* the thing a touch actually lands on and drags — see the long comment in
+   script.js, right above where this element is created, for the full
+   reasoning; in short, the real input can no longer receive a
+   touch-originated event at all (pointer-events: none on it, coarse
+   pointers only, above), so there's no native default left for one to
+   ever fall back to. Sized and positioned in script.js
+   (updateSliderThumbVisuals()) to match the real input's own box exactly,
+   but taller — a comfortable tap target, not just the visible 6px track.
+   Invisible; the thumb's own look still comes entirely from
+   .slider-thumb-visual/.slider-thumb-visual__dot above. Mouse/fine
+   pointers never interact with this at all (pointer-events stays none
+   there), so nothing changes for them. */
+.slider-touch-target {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@media (pointer: coarse) {
+  .slider-touch-target {
+    pointer-events: auto;
+    /* the browser's own touch-to-scroll/zoom gesture recognition would
+       otherwise compete with the drag handling in script.js (its own
+       pointerdown there never calls preventDefault any more — there's
+       nothing native left on this element to prevent — but a touch that
+       isn't perfectly horizontal could still be read as a page-scroll
+       attempt without this). */
+    touch-action: none;
+  }
 }
 
 .slider-thumb-visual__dot {
@@ -765,7 +798,13 @@ body {
   }
 }
 
-.field input[type="range"]:active + .slider-thumb-visual .slider-thumb-visual__dot {
+/* mouse/fine-pointer press — a touch press can no longer reach the real
+   input's own :active at all (pointer-events: none on it for coarse
+   pointers), so the equivalent for touch is script.js toggling
+   is-pressed on .slider-thumb-visual directly instead, during the exact
+   window .slider-touch-target has a drag in progress. */
+.field input[type="range"]:active + .slider-thumb-visual .slider-thumb-visual__dot,
+.slider-thumb-visual.is-pressed .slider-thumb-visual__dot {
   transform: scale(1.2);
 }
 
