@@ -155,7 +155,6 @@ body {
 }
 
 .modes__tab {
-  flex: 1;
   display: flex;
   align-items: center;
   padding: 22px 16px;
@@ -192,6 +191,17 @@ body {
    land feels dead the instant a tap has any latency. */
 .modes__tab:active { transform: scale(0.97); }
 
+/* a single-line label reads best vertically centered against the tab's own
+   padding, but a wrapped, multi-line label centered the same way looks
+   adrift from the top of the tab instead of starting where reading
+   naturally begins — so each tab top-aligns its own label the moment IT
+   wraps (is-wrapped is toggled per tab, not shared across the row, by
+   updateTabIndicator() in script.js measuring that tab's own rendered
+   line count). */
+.modes__tab.is-wrapped {
+  align-items: flex-start;
+}
+
 /* scoped to devices that can actually hover with a precise pointer — a
    touchscreen has no real "hover", but without this guard mobile browsers
    still apply :hover on tap and then hold it until a different element is
@@ -201,11 +211,10 @@ body {
   .modes__tab:hover { color: var(--ink); }
 }
 
-/* Tabs still span the full width edge-to-edge on phone (flex: 1 from the
-   base rule keeps them evenly splitting it, same as desktop) — labels just
-   wrap to more lines as needed, centered like any other button text. A
-   horizontal-scrolling strip was tried here instead but left tabs 2/3
-   mostly off-screen with no visual hint there was more to scroll to. */
+/* tabs hug their own label's width (plus this padding) rather than
+   stretching to fill the bar — the bar's own background matches the page,
+   so the leftover space after the last tab reads as bar, not gap. Just a
+   bit tighter on phone, where every px of width matters more. */
 @media (max-width: 640px) {
   .modes__tab {
     padding: 18px 14px;
@@ -611,17 +620,14 @@ body {
    used): Chrome/Blink already vertically centers a custom-sized thumb by
    default, and an earlier attempt at a margin-top compensation was
    throwing that off, not fixing it — confirmed there, in this same tool,
-   and left alone here. Safari/WebKit is a separate case: it's a
-   well-documented, long-standing engine difference that Safari does NOT
-   auto-center a custom-sized ::-webkit-slider-thumb the way Blink does, so
-   it needs that margin-top compensation Blink doesn't — but this tool has
-   no way to load real Safari to confirm that directly, so the fix below is
-   gated to Safari/WebKit specifically (see the @supports block) precisely
-   so it can't touch the behavior already verified correct here if that
-   documented difference turns out not to apply. --thumb-size is a custom
-   property (rather than repeating the number across width/height/
-   margin-top) so the Safari-only compensation's math can reference the
-   exact same number the visible size uses, in one place.
+   and left alone here. A LATER attempt added a margin-top back again,
+   gated behind an @supports(-webkit-touch-callout:none) check, on the
+   theory that Safari specifically doesn't auto-center the way Blink does
+   — that was never verified on a real device (this tool can't load
+   Safari), and real-device feedback afterward said the phone thumb was no
+   longer centered, i.e. this second margin-top attempt was ALSO wrong and
+   has been removed again. Two separate margin-top attempts have now made
+   things worse rather than better — treat a third as suspect by default.
    Hover no longer resizes the thumb (a resize-on-hover is indistinguishable
    from resize-on-press on a touchscreen, since touch fires both at once) —
    it shifts to a color-only change instead, matching the hover treatment
@@ -664,20 +670,6 @@ body {
 
 .field input[type="range"]:active::-webkit-slider-thumb {
   transform: scale(1.2);
-}
-
-/* see the long comment above the rest-state rule for why this is scoped to
-   Safari/WebKit only — -webkit-touch-callout is a real, load-bearing
-   feature check here (not just a comment): every iOS browser is WebKit
-   under the hood regardless of app (Safari, Chrome-iOS, Firefox-iOS all
-   alike), and none of them support setting it off, so this reaches all of
-   them, while Chrome/Blink (this tool included) doesn't support the
-   property at all and never matches. */
-@supports (-webkit-touch-callout: none) {
-  .field input[type="range"]::-webkit-slider-thumb {
-    margin-top: calc((6px - var(--thumb-size)) / 2);
-    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, margin-top 0.15s ease;
-  }
 }
 
 /* Firefox centers a custom -moz-range-thumb on the track automatically, so

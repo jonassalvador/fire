@@ -61,6 +61,24 @@ function updateTabIndicator() {
   modesIndicator.style.transform = `translateX(${activeTab.offsetLeft}px)`;
 }
 
+// Each tab centers its label when it's one line, but top-aligns it the
+// moment that specific tab's own label wraps to two+ lines — counting
+// actual rendered line boxes (via a Range over the text) rather than
+// comparing scrollHeight to line-height, since line-height often computes
+// to the unresolved keyword "normal" rather than a pixel value. This is
+// per tab, not a single shared flag, since tabs no longer stretch to a
+// shared width (see .modes__tab in style.css) and so can wrap
+// independently of one another.
+function updateTabWrapping() {
+  modeTabs.forEach(tab => {
+    const label = tab.querySelector('.modes__label');
+    if (!label) return;
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    tab.classList.toggle('is-wrapped', range.getClientRects().length > 1);
+  });
+}
+
 // .modes sits at position:sticky/top:0, so it reports the same
 // getBoundingClientRect() at top:0 whether it's genuinely pinned with
 // content scrolling in behind it or just passing through that same spot in
@@ -78,11 +96,15 @@ if (modesSentinel && 'IntersectionObserver' in window) {
   ).observe(modesSentinel);
 }
 
-// tab widths can change (viewport resize, or the label font swapping in),
-// so the indicator needs repositioning whenever they do.
-window.addEventListener('resize', updateTabIndicator);
+// tab widths (and so wrapping and indicator position alike) can change on
+// viewport resize or once the label font swaps in.
+function updateTabLayout() {
+  updateTabWrapping();
+  updateTabIndicator();
+}
+window.addEventListener('resize', updateTabLayout);
 if (document.fonts && document.fonts.ready) {
-  document.fonts.ready.then(updateTabIndicator);
+  document.fonts.ready.then(updateTabLayout);
 }
 
 modeTabs.forEach(tab => {
@@ -1268,4 +1290,4 @@ document.querySelectorAll('input[type="range"], select, input[type="checkbox"]')
 
 updateVisibility();
 recalculate();
-updateTabIndicator();
+updateTabLayout();
