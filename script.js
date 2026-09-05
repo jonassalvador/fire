@@ -1,3 +1,10 @@
+// iOS Safari only evaluates :active styles on elements while a touch
+// listener exists somewhere in the document — without one, tapping a tab or
+// switch never shows the press-scale feedback at all (the CSS is correct,
+// the pseudo-class just never activates). The listener itself does nothing;
+// its mere presence is what turns :active on.
+document.addEventListener('touchstart', () => {}, { passive: true });
+
 // ---------- DOM refs ----------
 
 const els = {};
@@ -76,6 +83,23 @@ function updateTabIndicator() {
   modesIndicator.style.transform = `translateX(${activeTab.offsetLeft}px)`;
 }
 
+// .modes sits at position:sticky/top:0, so it reports the same
+// getBoundingClientRect() at top:0 whether it's genuinely pinned with
+// content scrolling in behind it or just passing through that same spot in
+// its normal, non-stuck document position — there's no property on .modes
+// itself to tell the two apart. The sentinel above it (a zero-height div in
+// normal flow, right where .modes would sit if it weren't sticky) gives an
+// unambiguous signal instead: once the sentinel scrolls above the viewport,
+// .modes can only still be visible at top:0 because it's now actually
+// pinned there.
+const modesSentinel = document.querySelector('.modes__sentinel');
+if (modesSentinel && 'IntersectionObserver' in window) {
+  new IntersectionObserver(
+    ([entry]) => modesNav.classList.toggle('is-stuck', !entry.isIntersecting && entry.boundingClientRect.top < 0),
+    { threshold: 0 }
+  ).observe(modesSentinel);
+}
+
 window.addEventListener('resize', updateModesAlignment);
 if (document.fonts && document.fonts.ready) {
   // the label font (Inter) loads asynchronously — re-check once it's actually
@@ -118,7 +142,7 @@ function updateReturnVisibility() {
   const capitalModeHint = document.getElementById('capital-mode-hint');
   capitalModeHint.textContent = isSplit
     ? 'Du delar upp kapitalet i Aktier/fonder, Räntor och Sparkonto, med egen avkastning och skatt.'
-    : `Förutsätter en generell blandportfölj med 60–70 % aktier, 30–40 % räntor, och ${els.return.value} % förväntad avkastning nominellt.`;
+    : `Generell blandportfölj: 60–70 % aktier, 30–40 % räntor, ${els.return.value} % förväntad avkastning nominellt.`;
 }
 
 document.querySelectorAll('input[name="capitalMode"]').forEach(radio => {
@@ -318,14 +342,14 @@ function computeStartBuckets() {
 // otherwise dragging "Önskad månadskonsumtion" across a level boundary
 // changes this hint's height and pushes the rest of the form up or down.
 const FIRE_LEVELS = [
-  { min: 5000, name: 'Barista FIRE', desc: 'Portföljen täcker en liten bas — du behöver fortfarande jobba deltid för att klara dig.' },
-  { min: 10000, name: 'Lean FIRE', desc: 'Du är helt fri men lever extremt minimalistiskt — bara mat, boende och absoluta måsten.' },
-  { min: 15000, name: 'Slender FIRE', desc: 'Steget mellan fattig och lagom — visst utrymme för rörliga utgifter, men budgetera strikt.' },
+  { min: 5000, name: 'Barista FIRE', desc: 'Portföljen täcker en liten bas — du jobbar fortfarande deltid för att klara dig.' },
+  { min: 10000, name: 'Lean FIRE', desc: 'Helt fri, men minimalistiskt: bara mat, boende, absoluta måsten.' },
+  { min: 15000, name: 'Slender FIRE', desc: 'Mellan fattigt och lagom — visst utrymme, men budgetera strikt.' },
   { min: 20000, name: 'Regular FIRE', desc: 'Motsvarar en genomsnittlig svensk nettoinkomst, utan ekonomisk stress.' },
-  { min: 30000, name: 'Chubby FIRE', desc: 'Det välbärgade gränslandet — guldkant på tillvaron med utrymme för resor och restauranger.' },
-  { min: 40000, name: 'Fat FIRE', desc: 'Ren lyxnivå i Sverige — bo dyrt, res i business class, och köp utan att titta på prislappen.' },
-  { min: 60000, name: 'Obese FIRE', desc: 'Extremt hög levnadsstandard — ekonomin begränsar dig inte på något realistiskt sätt.' },
-  { min: 100000, name: 'Whale FIRE', desc: 'Ekonomiskt oberoende på generationsnivå, i klass med höginkomsttagare och mångmiljonärer.' },
+  { min: 30000, name: 'Chubby FIRE', desc: 'Guldkant på tillvaron, med utrymme för resor och restauranger.' },
+  { min: 40000, name: 'Fat FIRE', desc: 'Ren lyxnivå i Sverige, res i business class utan att titta på prislappen.' },
+  { min: 60000, name: 'Obese FIRE', desc: 'Extremt hög levnadsstandard — ekonomin begränsar dig inte nämnvärt.' },
+  { min: 100000, name: 'Whale FIRE', desc: 'Ekonomiskt oberoende på generationsnivå — klass med mångmiljonärer.' },
 ];
 
 function fireLevelFor(spend) {

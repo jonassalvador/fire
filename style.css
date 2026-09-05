@@ -22,7 +22,15 @@
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  /* iOS Safari's default tap flash otherwise renders as a lingering gray
+     tint on any tapped element (buttons, switches, tab labels) until a
+     different element is tapped — reads as a stuck hover state, since the
+     :hover rules below are also scoped to hover-capable pointers only and
+     were never the actual source of it. */
+  -webkit-tap-highlight-color: transparent;
+}
 
 html, body {
   margin: 0;
@@ -102,6 +110,28 @@ body {
   /* keeps iOS Safari from occasionally lagging a frame behind on scroll,
      which briefly shows the same gap even with the safe-area fix above. */
   transform: translateZ(0);
+  /* fades in only once actually pinned to the top with page content
+     scrolling in behind it (see .is-stuck below) — a permanent shadow would
+     look wrong while the bar still sits in its normal spot under the
+     masthead, with nothing behind it to separate from yet. */
+  box-shadow: 0 12px 24px -8px rgba(22, 23, 24, 0);
+  transition: box-shadow 0.2s ease;
+}
+
+/* a zero-height marker in normal document flow immediately above .modes, at
+   the exact spot .modes itself would occupy if it weren't sticky — observed
+   (see script.js) so JS can tell the two apart: .modes staying visually at
+   top:0 the entire time gives no signal of its own about whether it's
+   currently sitting in its natural place or actually pinned mid-scroll, but
+   this sentinel scrolling out of view above the viewport is exactly the
+   moment .modes starts covering real content instead of just sitting where
+   it always was. */
+.modes__sentinel {
+  height: 0;
+}
+
+.modes.is-stuck {
+  box-shadow: 0 12px 24px -8px rgba(22, 23, 24, 0.18);
 }
 
 .modes__tab {
@@ -154,23 +184,24 @@ body {
   align-items: flex-start;
 }
 
-.modes__tab:hover { color: var(--ink); }
+/* scoped to devices that can actually hover with a precise pointer — a
+   touchscreen has no real "hover", but without this guard mobile browsers
+   still apply :hover on tap and then hold it until a different element is
+   tapped, reading as a stuck-on highlight (compounds with, but is separate
+   from, the tap-highlight fix on * above). */
+@media (hover: hover) and (pointer: fine) {
+  .modes__tab:hover { color: var(--ink); }
+}
 
-/* below ~640px, four full labels can't fit side by side without wrapping
-   into a cramped, multi-line tower — let the bar scroll horizontally
-   instead, one line per tab, same as a standard mobile segmented-tab
-   strip; the scrollbar itself is hidden since swiping is the expected way
-   to reach it, not scrollbar-dragging. */
+/* Tabs still span the full width edge-to-edge on phone (flex: 1 from the
+   base rule keeps them evenly splitting it, same as desktop) — labels just
+   wrap to more lines as needed, which .modes.is-wrapped above already
+   handles gracefully (top-aligning the badge instead of centering it
+   against a taller multi-line label). A horizontal-scrolling strip was
+   tried here instead but left tabs 2/3 mostly off-screen with no visual
+   hint there was more to scroll to. */
 @media (max-width: 640px) {
-  .modes {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .modes::-webkit-scrollbar { display: none; }
   .modes__tab {
-    flex: 0 0 auto;
-    white-space: nowrap;
     padding: 18px 14px;
   }
 }
@@ -317,8 +348,10 @@ body {
   margin: 0;
 }
 
-.field-group__header:hover .field-group__title {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .field-group__header:hover .field-group__title {
+    color: var(--ink);
+  }
 }
 
 /* Animated expand/collapse: a CSS Grid row sized in `fr` units instead of
@@ -354,6 +387,22 @@ body {
   min-height: 0;
   opacity: 0;
   transition: opacity 0.3s ease;
+  /* a slider thumb sitting at its min/max value extends past the track's
+     own end by half its own width — up to 12px at the 24px size it grows to
+     while being dragged (see the :active thumb rule below), plus a couple
+     more px for its box-shadow's blur — and this overflow:hidden was
+     clipping that legitimate bleed at both ends (confirmed directly:
+     measuring every range input's right edge against its nearest
+     overflow:hidden ancestor showed the two landing within 2px of each
+     other for every slider inside one of these wrappers, and only these —
+     the handful of sliders that sit directly in a plain, non-collapsible
+     .field-group were never clipped at all). Extending the box outward by
+     20px via margin, then padding the same 20px back on the inside, keeps
+     every child's rendered position identical to before (the two exactly
+     cancel out) while giving the clipping boundary itself 20px of slack on
+     each side to clip into instead of clipping the thumb. */
+  margin: 0 -20px;
+  padding: 0 20px;
 }
 
 /* fades in/out over the same 0.3s as the outer grid-row slide above, so the
@@ -459,8 +508,10 @@ body {
   transition: transform 0.25s ease, color 0.15s ease;
 }
 
-.field-group__header:hover .field-group__chevron {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .field-group__header:hover .field-group__chevron {
+    color: var(--ink);
+  }
 }
 
 .field-group__header[aria-expanded="true"] .field-group__chevron {
@@ -542,19 +593,28 @@ body {
   margin-top: 6px;
 }
 
-/* hover/active resize the real width/height, so the 3px border never scales
-   with it — an earlier transform: scale() attempt kept the border a
-   constant WIDTH but scaling and border-width interpolate independently
-   during the transition, so the two only truly cancel out at the exact
-   rest/hover/active endpoints, not the frames in between, which read as
+/* active (pressed/dragging) resizes the real width/height, so the 3px
+   border never scales with it — an earlier transform: scale() attempt kept
+   the border a constant WIDTH but scaling and border-width interpolate
+   independently during the transition, so the two only truly cancel out at
+   the exact rest/active endpoints, not the frames in between, which read as
    the ring's thickness wavering. A plain size change has no such
    trade-off. No margin-top is needed to center it on the track either —
    verified directly (a reference line drawn at the track's exact
-   mathematical center, at both 20px and 23px thumb sizes): Chrome/WebKit
+   mathematical center, at both 20px and 24px thumb sizes): Chrome/WebKit
    already vertically centers a custom-sized thumb on the track by
    default. An earlier attempt added a margin-top compensation on the
    theory that it doesn't — that theory was simply wrong, and the "fix"
-   was the thing throwing the centering off in the first place. */
+   was the thing throwing the centering off in the first place.
+   Hover no longer resizes the thumb (a resize-on-hover is indistinguishable
+   from resize-on-press on a touchscreen, since touch fires both at once) —
+   it shifts to a color-only change instead, matching the hover treatment
+   used everywhere else (tabs, switches). Active now grows the thumb LARGER
+   than rest, the reverse of an earlier version that shrank it while
+   dragging. The rest-state shadow is a real, intentional box-shadow rather
+   than relying on any browser's own default touch-highlight rendering (that
+   default does show something shadow-like on some mobile browsers, but it's
+   not present on desktop and isn't reliable enough to depend on). */
 .field input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 20px;
@@ -562,18 +622,21 @@ body {
   border-radius: 50%;
   background: var(--paper-raised);
   border: 3px solid var(--accent);
+  box-shadow: 0 1px 3px rgba(22, 23, 24, 0.15), 0 1px 2px rgba(22, 23, 24, 0.1);
   cursor: pointer;
-  transition: width 0.15s ease, height 0.15s ease;
+  transition: width 0.15s ease, height 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.field input[type="range"]:hover::-webkit-slider-thumb {
-  width: 23px;
-  height: 23px;
+@media (hover: hover) and (pointer: fine) {
+  .field input[type="range"]:hover::-webkit-slider-thumb {
+    border-color: var(--accent-end);
+    background: var(--blush);
+  }
 }
 
 .field input[type="range"]:active::-webkit-slider-thumb {
-  width: 17px;
-  height: 17px;
+  width: 24px;
+  height: 24px;
 }
 
 /* Firefox centers a custom -moz-range-thumb on the track automatically, so
@@ -584,18 +647,21 @@ body {
   border-radius: 50%;
   background: var(--paper-raised);
   border: 3px solid var(--accent);
+  box-shadow: 0 1px 3px rgba(22, 23, 24, 0.15), 0 1px 2px rgba(22, 23, 24, 0.1);
   cursor: pointer;
-  transition: width 0.15s ease, height 0.15s ease;
+  transition: width 0.15s ease, height 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.field input[type="range"]:hover::-moz-range-thumb {
-  width: 23px;
-  height: 23px;
+@media (hover: hover) and (pointer: fine) {
+  .field input[type="range"]:hover::-moz-range-thumb {
+    border-color: var(--accent-end);
+    background: var(--blush);
+  }
 }
 
 .field input[type="range"]:active::-moz-range-thumb {
-  width: 17px;
-  height: 17px;
+  width: 24px;
+  height: 24px;
 }
 
 /* ---------- Strategy toggle ---------- */
@@ -665,8 +731,10 @@ body {
    before :has(checked) below so the selected fill always wins when hovering
    the already-active option (both rules share the same specificity, so
    source order decides). */
-.strategy-toggle__option:hover {
-  color: var(--ink);
+@media (hover: hover) and (pointer: fine) {
+  .strategy-toggle__option:hover {
+    color: var(--ink);
+  }
 }
 
 .strategy-toggle__option:has(input:checked) {
