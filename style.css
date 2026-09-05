@@ -1,14 +1,24 @@
 :root {
+  /* Lysa-inspired trial palette/type — see Fire Goodvest Inspired's
+     "D — Lysa-inspired" design canvas artboard, an exact font match (DM
+     Serif Display + Lexend are literally Lysa's own typefaces) with royal
+     blue as the sole accent. --blush/--rust are new, ported from that
+     artboard's capital-checkpoints stat band, which has no equivalent in
+     the previous palette. */
   --paper: #f4f1ea;
   --paper-raised: #ffffff;
-  --ink: #1c1a17;
-  --ink-soft: #6f6a61;
-  --rule: #d9d3c6;
-  --accent: #c1491f;
-  --accent-soft: #c1491f1a; /* used directly by drawChart()'s inline SVG fill in script.js — grepping style.css alone won't find that usage */
+  --ink: #161718;
+  --ink-soft: #5b5f61;
+  --rule: rgba(40, 42, 45, 0.15);
+  --accent: #1840e3;
+  --accent-end: #1e6cd7; /* subtle blue-toward-teal endpoint for --accent-gradient below */
+  --accent-gradient: linear-gradient(135deg, var(--accent), var(--accent-end));
+  --accent-soft: #1840e31a; /* used directly by drawChart()'s inline SVG fill in script.js — grepping style.css alone won't find that usage */
+  --blush: #fff1e8;
+  --rust: #5c2502;
 
-  --serif: "Fraunces", Georgia, "Times New Roman", serif;
-  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --serif: "DM Serif Display", Georgia, "Times New Roman", serif;
+  --sans: "Lexend", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -20,6 +30,16 @@ html, body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--sans);
+  /* Chrome's automatic scroll anchoring tries to keep some anchor node's
+     on-screen position stable whenever layout shifts above the viewport —
+     but the accordions' animated height change IS the intended layout
+     shift, not something to silently compensate for. Left on, it can pick
+     an anchor inside the very section that's resizing and fight the
+     animation, producing a large, wrong scroll jump (confirmed directly:
+     opening/closing a section while scrolled down moved window.scrollY by
+     hundreds of pixels). Disabling it site-wide leaves scroll position
+     fully under this page's own control. */
+  overflow-anchor: none;
 }
 
 body {
@@ -36,16 +56,6 @@ body {
 
 .masthead {
   padding: 64px 0 32px;
-  border-bottom: 3px solid var(--ink);
-}
-
-.masthead__issue {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  margin: 0 0 16px;
 }
 
 .masthead__title {
@@ -57,7 +67,12 @@ body {
   letter-spacing: -0.02em;
 }
 
-.masthead__dot { color: var(--accent); }
+.masthead__dot {
+  background: var(--accent-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
 
 .masthead__standfirst {
   font-size: 18px;
@@ -97,13 +112,36 @@ body {
   padding: 22px 16px;
   background: none;
   border: none;
+  /* kept transparent (not removed) purely to hold the same 3px of box
+     height the old colored version occupied — the indicator below now
+     owns the visible line, so a press-scale on the tab itself never drags
+     the line along with it. */
   border-bottom: 3px solid transparent;
   cursor: pointer;
   text-align: left;
   font-family: var(--sans);
   color: var(--ink-soft);
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color 0.15s ease, transform 0.1s ease-out;
 }
+
+/* a single shared indicator instead of a per-tab border — sized/positioned
+   by updateTabIndicator() in script.js, on every place the active tab or
+   tab layout can change. Decoupling it from any one tab's own box is what
+   lets it (a) stay put when that tab is pressed and scales down, and
+   (b) slide smoothly between tabs via the transition below, instead of
+   an old tab's line vanishing and a new one popping in already-colored. */
+.modes__indicator {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+  transition: transform 0.25s ease, width 0.25s ease;
+}
+
+/* feedback on press, not on release — waiting for the tab switch itself to
+   land feels dead the instant a tap has any latency. */
+.modes__tab:active { transform: scale(0.97); }
 
 /* while every label fits on one line, centering the badge against it reads
    best — but the moment ANY tab wraps to two lines, centering leaves the
@@ -139,7 +177,6 @@ body {
 
 .modes__tab.is-active {
   color: var(--ink);
-  border-bottom-color: var(--accent);
 }
 
 .modes__num {
@@ -150,7 +187,7 @@ body {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-gradient);
   color: #fff;
   font-family: var(--mono);
   font-size: 12px;
@@ -178,7 +215,19 @@ body {
   .layout { grid-template-columns: minmax(0, 1fr); gap: 48px; }
 }
 
-.result-column {
+/* .result-column is the grid item (sized to its own content via .layout's
+   align-items: start); the actual sticky positioning lives one level in,
+   on .result-column__sticky, rather than on the grid item itself.
+   Confirmed directly this isn't cosmetic: a sticky grid item's containing
+   block for stickiness is the grid track/area, shared with the left
+   column — when that column's own accordion grows or shrinks, the shared
+   track's height changes, which can flip the right column between
+   "stuck" and "not yet stuck" and visibly relocate it, even though
+   window.scrollY never moves. An extra wrapper that isn't itself a grid
+   item breaks that coupling: its containing block is .result-column's own
+   (content-based) height, independent of whatever the left column is
+   doing. */
+.result-column__sticky {
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -189,29 +238,38 @@ body {
 }
 
 @media (max-width: 880px) {
-  .result-column { position: static; }
+  .result-column__sticky { position: static; }
 }
 
 /* ---------- Field groups ---------- */
 
+/* Lysa-trial: rounded cards (12px radius), borderless — the white card vs.
+   cream page background alone gives enough separation. Ported from the
+   "D — Lysa-inspired" artboard's `.section`, minus its border per later
+   feedback. Each field-group is now a self-contained box, so the old
+   first-child zero-top-padding rules (needed only to avoid doubling up
+   padding at the top of a divider list) no longer apply and are removed
+   rather than adapted. */
 .field-group {
-  padding: 32px 0;
-  border-bottom: 2px solid var(--ink);
+  background: var(--paper-raised);
+  border-radius: 12px;
+  padding: 28px;
+  margin-bottom: 20px;
 }
 
-.field-group:first-child { padding-top: 0; }
-/* "Utgångsläge" (now first) is itself hidden in "Hur mycket behöver jag?" —
-   when that happens, "Fire-mål" right after it is really the first visible
-   group, so it needs the same zeroing instead. */
-.field-group:first-child.mode-hidden + .field-group { padding-top: 0; }
+.field-group:last-child { margin-bottom: 0; }
 
+/* Lysa-trial: matches the reference artboard's `.section-title` — sans
+   (not mono), tighter tracking. */
 .field-group__title {
-  font-family: var(--mono);
+  font-family: var(--sans);
+  font-weight: 700;
   font-size: 12px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-soft);
   margin: 0 0 24px;
+  transition: color 0.15s ease;
 }
 
 /* collapsible field-groups (Tillväxt, Inflation, Skatter) wrap the title in
@@ -221,6 +279,16 @@ body {
    is untouched (no padding/margin changes), so the visible layout is
    identical to a plain, non-collapsible field-group. */
 .field-group__header {
+  /* isolate: scopes the ::before's z-index:-1 below to this header's own
+     stacking context, so it only sinks behind the header's own text/chevron
+     — without this, a negative z-index is resolved against the page's
+     outer stacking context instead, which sinks the ::before behind the
+     .field-group card's own background everywhere the ::before extends
+     beyond the header's own layout box, breaking clicks/hover across the
+     whole extended hit area outside the visible text (confirmed via
+     elementFromPoint(): it resolved to the plain .field-group div, not the
+     button, at any point above/below the header's own text). */
+  isolation: isolate;
   position: relative;
   display: flex;
   align-items: center;
@@ -235,6 +303,14 @@ body {
   color: inherit;
   text-align: left;
   cursor: pointer;
+  /* this margin drops to 0 the instant the section is told to close (see
+     the :has() rule below) — without a transition of its own, that happens
+     immediately, a full 24px ahead of the content's own 0.3s height
+     collapse, reading as the content jumping up before the section has
+     actually finished closing. Matching that same 0.3s here keeps the two
+     in sync, so the margin only finishes shrinking exactly as the content
+     does. */
+  transition: margin-bottom 0.3s ease;
 }
 
 .field-group__header .field-group__title {
@@ -245,38 +321,146 @@ body {
   color: var(--ink);
 }
 
+/* Animated expand/collapse: a CSS Grid row sized in `fr` units instead of
+   the `hidden` attribute's instant display:none — `grid-template-rows`
+   accepts fr values as an actually-interpolable target (plain `auto`
+   isn't), so transitioning 0fr -> 1fr smoothly grows/shrinks the row to
+   the content's real height with no JS measurement needed. The row's
+   single child needs its own overflow:hidden, since content doesn't
+   get clipped by a shrinking grid track on its own — without it the
+   fields would stay fully visible, just overlapping whatever is below,
+   while the row itself animated closed.
+   .field-group__content is this same pattern applied to the collapsible
+   Avkastning/Inflation/Skatter sections specifically; .expand-collapse is
+   the identical, generically-named version used everywhere else content
+   is revealed by a switch instead of a chevron header (Egen fördelning's
+   asset cards, Die With Zero's extra fields, pension fields, "Vänta lite
+   till"'s fields) — same animation, not tied to a header. */
+.field-group__content,
+.expand-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease;
+}
+
+.field-group__content.is-open,
+.expand-collapse.is-open {
+  grid-template-rows: 1fr;
+}
+
+.field-group__content-inner,
+.expand-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* fades in/out over the same 0.3s as the outer grid-row slide above, so the
+   two read as one combined motion instead of the content just appearing
+   partway through the row's own height animation. Applying this to the
+   shared .field-group__content-inner/.expand-collapse-inner pair (rather
+   than duplicating it per feature) is what makes the switch-driven
+   sections (Egen fördelning, Die With Zero, pension, "Vänta lite till")
+   pick up the exact same slide+fade the chevron accordions use, with
+   nothing extra needed for either. */
+.field-group__content.is-open .field-group__content-inner,
+.expand-collapse.is-open .expand-collapse-inner {
+  opacity: 1;
+}
+
+/* the last visible thing inside a collapsible/expandable wrapper sits flush
+   against its bottom edge — a few px of clearance so a trailing slider's
+   thumb (which, even centered on its 6px track, overflows the .field row's
+   own box by ~5px at rest — measured directly via getBoundingClientRect(),
+   not assumed — before hover grows it further, +1.5px more at 23px) isn't
+   clipped by that wrapper's overflow:hidden. `> *:last-child` rather than
+   `.field:last-child` specifically, since not every one of these sections
+   ends in a slider — capital-split-fields and pension-fields end in a
+   .field-hint instead, and the fix needs to reach whichever element is
+   actually last. This has to be a child's own margin, not padding on the
+   wrapper itself — padding is part of the wrapper's own box and always
+   renders at its declared size, so it would keep the collapsed row a few
+   px tall instead of truly 0, showing a sliver of content even when
+   closed; a child's margin has no such floor. 8px covers the overflow with
+   a small buffer to spare. */
+/* targets the specific element classes (not `> *`) combined with the
+   wrapper class, so this reliably outweighs .field:last-child and
+   .field-hint:last-child below (each 0,2,0 same as a bare `> *:last-child`
+   would be) regardless of source order, instead of depending on which
+   happens to come later in the file. */
+.field-group__content-inner > .field:last-child,
+.field-group__content-inner > .field-hint:last-child,
+.expand-collapse-inner > .field:last-child,
+.expand-collapse-inner > .field-hint:last-child {
+  margin-bottom: 8px;
+}
+
 /* collapsed (content hidden) — the header is the only visible thing left in
    the group, so it needs the same last-visible-element zeroing every other
    collapsible control in this file gets, instead of adding its 24px on top
    of the field-group's own bottom padding. */
-.field-group__header:has(+ .field-group__content[hidden]) {
+.field-group__header:has(+ .field-group__content:not(.is-open)) {
   margin-bottom: 0;
 }
 
 /* the actual clickable region — an invisible, absolutely-positioned (so it
-   can't affect layout at all) box stretched well past the visible title
-   text in every direction, as far as it can safely go without overlapping
-   anything else: up through this field-group's own top padding (into the
-   dead space right up to the divider above), and down through the gap to
-   the first slider — or, when collapsed, all the way to this field-group's
-   own bottom padding, since nothing else is there to click. */
+   can't affect layout at all) box stretched past the visible title text.
+   Fills the card horizontally edge-to-edge (the header's own width is
+   already inset by the card's 28px side padding, so -28px left/right reaches
+   the card's true left/right edges) — but is bounded vertically to never
+   exceed the card's own top/bottom edges (also 28px of padding), so it can
+   never reach into the gap above/below and overlap a neighboring card's own
+   hit area. Down (expanded) stops sooner, at the 24px gap to the first
+   slider — the most it can go before it would start overlapping that
+   slider's own hit area. */
 .field-group__header::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  top: -32px;
+  left: -28px;
+  right: -28px;
+  top: -28px;
   bottom: -24px;
+  /* isolation (see .field-group__header above) keeps this negative z-index
+     scoped to the header's own stacking context — without it, this sinks
+     behind the .field-group card's own background everywhere it extends
+     beyond the header's own layout box, breaking clicks/hover there
+     entirely (confirmed via elementFromPoint(): resolved to the plain
+     .field-group div, not the button). */
+  z-index: -1;
+  transition: background 0.1s ease-out;
 }
 
-.field-group__header:has(+ .field-group__content[hidden])::before {
-  bottom: -32px;
+/* hover is text-only (title/chevron darken — see :hover .field-group__title
+   and :hover .field-group__chevron above) — no background tint, matching
+   the same text-only hover treatment as the pill switches. */
+
+/* row-highlight feedback on press — the title/chevron color transition
+   alone doesn't fire until release, and a full-width row reads better with
+   a background tint than the scale-down used on the smaller tab/toggle
+   controls elsewhere. Lysa-trial: --paper-raised is now the same white as
+   the field-group card itself, so the tint needs its own visible color
+   instead — reusing the same subtle ink wash the pill switches sit on. */
+.field-group__header:active::before {
+  background: rgba(40, 42, 45, 0.06);
+  border-radius: 12px;
+}
+
+/* collapsed: nothing else is in this card, so the same reach as the top
+   offset above applies downward too — landing exactly on the card's own
+   bottom edge, same as the top. */
+.field-group__header:has(+ .field-group__content:not(.is-open))::before {
+  bottom: -28px;
 }
 
 .field-group__chevron {
   flex-shrink: 0;
   color: var(--ink-soft);
-  transition: transform 0.25s ease;
+  transition: transform 0.25s ease, color 0.15s ease;
+}
+
+.field-group__header:hover .field-group__chevron {
+  color: var(--ink);
 }
 
 .field-group__header[aria-expanded="true"] .field-group__chevron {
@@ -291,16 +475,30 @@ body {
 }
 
 .field:last-child { margin-bottom: 0; }
+/* a .field followed only by a mode-hidden wrapper (e.g. Utgångsläge's
+   "Månatligt sparande" on tab 2 — Utgångsläge is shared with tab 3, whose
+   own withdraw-timing switch sits after it in the same field-group, wrapped
+   in its own data-modes div) is the true last VISIBLE thing in the card
+   even though it isn't the DOM's literal :last-child — CSS has no
+   ":last-visible-child", so this matches the same "nothing visible follows"
+   case structurally instead: a field immediately before a hidden wrapper
+   that's itself last. Without this, that field keeps its normal 32px
+   bottom margin on top of the card's own padding, reading as extra space
+   at the bottom of the card. */
+.field:has(+ .mode-hidden:last-child) { margin-bottom: 0; }
 
 .field--compact { margin-bottom: 24px; }
 
 /* white card around each hink in "Finjustera portfölj" — its .field/.field-hint
    pair keeps their normal internal spacing (the rules below still apply
    inside), the card just adds a visible boundary and its own stacking gap. */
+/* borderless, like the outer cards — but these nest inside a white
+   .field-group, so they need their own background (the same ink wash the
+   pill switches' inactive track uses, one level in) rather than a border
+   to stay visually distinct. */
 .asset-card {
-  background: var(--paper-raised);
-  border: 1px solid var(--rule);
-  border-radius: 2px;
+  background: rgba(40, 42, 45, 0.06);
+  border-radius: 8px;
   padding: 20px;
   margin-bottom: 16px;
 }
@@ -308,76 +506,134 @@ body {
 .asset-card:last-child { margin-bottom: 0; }
 
 .field__label {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--ink);
 }
 
+/* Lysa-trial: matches the reference artboard's `.field-value` — sans,
+   bolder, not mono; gradient text so it picks up --accent-gradient like
+   the other accent-colored fills. */
 .field__value {
-  font-family: var(--mono);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--accent);
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--accent-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
   text-align: right;
   white-space: nowrap;
 }
 
+/* Lysa-trial: matches the reference artboard's `.track`/`.track-fill`/
+   `.thumb` — a thicker, pill-shaped track with a filled progress portion
+   (its own gradient, updated per-slider by updateSliderFills() in
+   script.js on every recalculate()) instead of a plain thin line, and a
+   bigger always-accent-bordered thumb instead of one that only turns
+   accent-colored on hover/focus. */
 .field input[type="range"] {
   grid-column: 1 / -1;
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 2px;
-  background: var(--rule);
-  border-radius: 1px;
+  height: 6px;
+  background: var(--rule); /* fallback — updateSliderFills() overrides this inline per slider */
+  border-radius: 99px;
   margin-top: 6px;
 }
 
+/* hover/active resize the real width/height, so the 3px border never scales
+   with it — an earlier transform: scale() attempt kept the border a
+   constant WIDTH but scaling and border-width interpolate independently
+   during the transition, so the two only truly cancel out at the exact
+   rest/hover/active endpoints, not the frames in between, which read as
+   the ring's thickness wavering. A plain size change has no such
+   trade-off. No margin-top is needed to center it on the track either —
+   verified directly (a reference line drawn at the track's exact
+   mathematical center, at both 20px and 23px thumb sizes): Chrome/WebKit
+   already vertically centers a custom-sized thumb on the track by
+   default. An earlier attempt added a margin-top compensation on the
+   theory that it doesn't — that theory was simply wrong, and the "fix"
+   was the thing throwing the centering off in the first place. */
 .field input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: var(--paper);
-  border: 2px solid var(--ink);
+  background: var(--paper-raised);
+  border: 3px solid var(--accent);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: width 0.15s ease, height 0.15s ease;
 }
 
-.field input[type="range"]:hover::-webkit-slider-thumb,
-.field input[type="range"]:focus::-webkit-slider-thumb {
-  background: var(--accent);
-  border-color: var(--accent);
+.field input[type="range"]:hover::-webkit-slider-thumb {
+  width: 23px;
+  height: 23px;
 }
 
+.field input[type="range"]:active::-webkit-slider-thumb {
+  width: 17px;
+  height: 17px;
+}
+
+/* Firefox centers a custom -moz-range-thumb on the track automatically, so
+   this doesn't need (and shouldn't get) the margin-top hack above. */
 .field input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: var(--paper);
-  border: 2px solid var(--ink);
+  background: var(--paper-raised);
+  border: 3px solid var(--accent);
   cursor: pointer;
+  transition: width 0.15s ease, height 0.15s ease;
 }
 
-/* bigger grab target on touch devices — 16px reads fine with a mouse
-   pointer, but is fiddly to pick up precisely with a fingertip. */
-@media (max-width: 640px) {
-  .field input[type="range"]::-webkit-slider-thumb {
-    width: 20px;
-    height: 20px;
-  }
-  .field input[type="range"]::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-  }
+.field input[type="range"]:hover::-moz-range-thumb {
+  width: 23px;
+  height: 23px;
+}
+
+.field input[type="range"]:active::-moz-range-thumb {
+  width: 17px;
+  height: 17px;
 }
 
 /* ---------- Strategy toggle ---------- */
-
+/* Lysa-trial: pill switch ported from the "A — Warm" artboard's
+   `.toggle`/`.toggle-opt` (a padded, rounded track holding rounded
+   options separated by a gap, rather than a bordered strip divided by
+   hairlines) — kept as the one piece taken from that design rather than
+   the Lysa artboard, per what was asked. The active fill uses the
+   Lysa-trial accent (blue) in place of that artboard's teal, so the
+   switches still read as part of this same re-skin. */
 .strategy-toggle {
+  /* isolate scopes the indicator's negative z-index below (see
+     .strategy-toggle__indicator) to just this toggle's own children —
+     same reasoning/fix as .field-group__header's isolation. */
+  position: relative;
+  isolation: isolate;
   display: flex;
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  overflow: hidden;
+  gap: 6px;
+  background: rgba(40, 42, 45, 0.06);
+  border-radius: 99px;
+  padding: 5px;
+}
+
+/* the shared sliding fill — sized/positioned by updateToggleIndicators() in
+   script.js from whichever option is currently checked, same pattern as
+   .modes__indicator for the tabs. A single animated element (instead of
+   each option fading its own background in/out independently) is what
+   makes the selection visibly slide from one option to the other. */
+.strategy-toggle__indicator {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  border-radius: 99px;
+  background: var(--accent-gradient);
+  z-index: -1;
+  pointer-events: none;
+  transition: transform 0.25s ease, width 0.25s ease;
 }
 
 .strategy-toggle__option {
@@ -388,17 +644,14 @@ body {
   justify-content: center;
   overflow-wrap: break-word;
   text-align: center;
-  padding: 10px 12px;
+  padding: 10px 14px;
+  border-radius: 99px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   color: var(--ink-soft);
-  background: var(--paper-raised);
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.strategy-toggle__option:not(:last-child) {
-  border-right: 1px solid var(--rule);
+  background: transparent;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease-out;
 }
 
 .strategy-toggle__option input {
@@ -408,16 +661,34 @@ body {
   height: 0;
 }
 
-.strategy-toggle__option:has(input:checked) {
-  background: var(--ink);
-  color: var(--paper);
+/* text-only hover for an unselected option (no background tint) — declared
+   before :has(checked) below so the selected fill always wins when hovering
+   the already-active option (both rules share the same specificity, so
+   source order decides). */
+.strategy-toggle__option:hover {
+  color: var(--ink);
 }
+
+.strategy-toggle__option:has(input:checked) {
+  color: #fff;
+}
+
+/* same reasoning as .modes__tab — instant feedback on press, since the
+   background swap that shows the actual selection lands a beat later. */
+.strategy-toggle__option:active { transform: scale(0.97); }
 
 .field-hint {
   font-size: 12px;
   color: var(--ink-soft);
   line-height: 1.4;
   margin: 12px 0 32px;
+  /* several rules below zero this margin instantly when the switch-driven
+     section right after it collapses (:has(+ ... :not(.is-open))) — same
+     bug as .field-group__header's own margin-bottom, and the same fix:
+     without a transition of its own, the margin snaps to 0 a full 32px
+     ahead of the content's 0.3s height collapse, reading as a jump before
+     the section has actually finished closing. */
+  transition: margin-bottom 0.3s ease;
 }
 
 .field-hint a {
@@ -456,9 +727,9 @@ body {
    whenever the wrapper after it is visible (normal spacing before real
    content) — it only needs zeroing when that wrapper is hidden instead,
    making the hint the last visible thing in the section. */
-#strategy-hint:has(+ #die-with-zero-fields[hidden]),
-#pension-hint:has(+ #pension-fields[hidden]),
-#withdraw-timing-hint:has(+ #withdraw-wait-fields[hidden]) { margin-bottom: 0; }
+#strategy-hint:has(+ #die-with-zero-fields:not(.is-open)),
+#pension-hint:has(+ #pension-fields:not(.is-open)),
+#withdraw-timing-hint:has(+ #withdraw-wait-fields:not(.is-open)) { margin-bottom: 0; }
 
 /* a hint explaining the switch right above it should read as part of that
    switch, not as its own loosely-spaced section — true for every
@@ -472,15 +743,15 @@ body {
    that happens to end in a plain .field, which is already zeroed below. */
 .field-hint:last-child { margin-bottom: 0; }
 /* capital-mode-hint sits right before #capital-split-fields — when
-   Blandportfölj is selected that card is hidden, making the hint the last
-   visible thing in the section, so it needs the same zeroing. */
-.field-hint:has(+ #capital-split-fields[hidden]:last-child) { margin-bottom: 0; }
+   Blandportfölj is selected that card is collapsed, making the hint the
+   last visible thing in the section, so it needs the same zeroing. */
+.field-hint:has(+ #capital-split-fields:not(.is-open):last-child) { margin-bottom: 0; }
 
 /* ---------- Result panel ---------- */
 
 .panel--result {
   background: var(--paper-raised);
-  border: 1px solid var(--rule);
+  border-radius: 12px;
   padding: 40px;
 }
 
@@ -490,7 +761,7 @@ body {
 
 .comparison-box {
   background: var(--paper-raised);
-  border: 1px solid var(--rule);
+  border-radius: 12px;
   padding: 40px;
 }
 
@@ -499,26 +770,34 @@ body {
   .comparison-box { padding: 28px; }
 }
 
+/* Lysa-trial: matches the reference artboard's `.panel-eyebrow` — sans
+   (not mono), tighter tracking. Same treatment as .field-group__title
+   and .result__eyebrow below. */
 .comparison-box__eyebrow {
-  font-family: var(--mono);
+  font-family: var(--sans);
+  font-weight: 700;
   font-size: 12px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-soft);
   margin: 0 0 8px;
 }
 
+/* font style (family/weight) matched to .stats-row__item dd below, instead
+   of the display serif used for actual headline figures — this is a
+   comparison figure, not the main result. */
 .comparison-box__result {
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-size: 20px;
-  font-weight: 500;
+  font-weight: 600;
   margin: 0 0 32px;
 }
 
 .result__eyebrow {
-  font-family: var(--mono);
+  font-family: var(--sans);
+  font-weight: 700;
   font-size: 12px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-soft);
   margin: 0 0 8px;
@@ -557,8 +836,8 @@ body {
   position: absolute;
   pointer-events: none;
   background: var(--ink);
-  color: var(--paper);
-  font-family: var(--mono);
+  color: #fff;
+  font-family: var(--sans);
   font-size: 12px;
   white-space: nowrap;
   padding: 4px 8px;
@@ -566,39 +845,47 @@ body {
   z-index: 2;
 }
 
+/* Lysa-trial: matches the reference artboard's `.axis` — plain sans, not
+   mono, same treatment as .field__value/.chart-tooltip above. */
 .chart-axis {
   display: flex;
   justify-content: space-between;
-  font-family: var(--mono);
-  font-size: 11px;
+  font-family: var(--sans);
+  font-size: 12px;
   color: var(--ink-soft);
   margin-top: 8px;
   border-top: 1px solid var(--rule);
   padding-top: 8px;
 }
 
+/* Lysa-trial: a highlighted blush band instead of a plain top-rule row —
+   ported from the "D — Lysa-inspired" artboard's capital-checkpoints
+   `.stats`/`.stat-dd` (its rust-brown numerals against a pale blush fill). */
 .stats-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin: 32px 0 0;
-  padding-top: 24px;
-  border-top: 1px solid var(--rule);
+  padding: 22px 24px;
+  background: var(--blush);
+  border-radius: 12px;
 }
 
+/* Lysa-trial: matches the reference artboard's `.stat-dt` — plain sans,
+   not uppercase, no tracking; the checkpoint text itself is also
+   shortened ("Vid X år" instead of "Kapital vid X år") in script.js. */
 .stats-row__item dt {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
   margin: 0 0 6px;
 }
 
 .stats-row__item dd {
-  font-family: var(--serif);
-  font-size: 20px;
-  font-weight: 500;
+  font-family: var(--sans);
+  font-weight: 600;
+  color: var(--rust);
+  font-size: 24px;
   margin: 0;
   /* the formatted number uses non-breaking spaces between digit groups (so
      it never breaks mid-number in normal cases) — but at extreme values in

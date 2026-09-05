@@ -6,13 +6,12 @@
 <title>FIRE — Frihetskalkylatorn</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Lexend:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <header class="masthead">
-  <div class="masthead__issue">No. 01 — Utgåva om ekonomiskt oberoende</div>
   <h1 class="masthead__title">FIRE<span class="masthead__dot">.</span></h1>
   <p class="masthead__standfirst">En liten kalkylator för en stor fråga: när är du fri? Ställ in dina antaganden och se svaret ändras direkt.</p>
 </header>
@@ -30,6 +29,7 @@
     <span class="modes__num">03</span>
     <span class="modes__label">Hur mycket kan jag ta ut?</span>
   </button>
+  <div class="modes__indicator" aria-hidden="true"></div>
 </nav>
 
 <main class="layout">
@@ -53,6 +53,7 @@
 
       <div data-modes="withdraw">
         <div class="strategy-toggle">
+          <div class="strategy-toggle__indicator" aria-hidden="true"></div>
           <label class="strategy-toggle__option">
             <input type="radio" name="withdrawTiming" id="withdraw-now" value="now" checked>
             <span>Gå i FIRE nu</span>
@@ -64,7 +65,8 @@
         </div>
         <p class="field-hint" id="withdraw-timing-hint">Uttaget beräknas utifrån ditt kapital redan idag, som om du gick i FIRE direkt utan att vänta eller spara mer.</p>
 
-        <div id="withdraw-wait-fields" hidden>
+        <div class="expand-collapse" id="withdraw-wait-fields">
+          <div class="expand-collapse-inner">
           <label class="field">
             <span class="field__label">Antal år att vänta</span>
             <span class="field__value"><output id="out-waitYears">5</output> år</span>
@@ -76,6 +78,7 @@
             <span class="field__value"><output id="out-waitSavings">15 000</output> <span class="unit"></span></span>
             <input type="range" id="waitSavings" min="0" max="100000" value="15000" step="1000">
           </label>
+          </div>
         </div>
       </div>
     </div>
@@ -91,6 +94,7 @@
       <p class="field-hint" id="spend-hint" data-modes="need ready">Regular FIRE — Den klassiska FIRE-nivån. Motsvarar en genomsnittlig svensk nettoinkomst. Du lever ett normalt, bra liv utan ekonomisk stress.</p>
 
       <div class="strategy-toggle">
+        <div class="strategy-toggle__indicator" aria-hidden="true"></div>
         <label class="strategy-toggle__option">
           <input type="radio" name="strategy" id="strategy-preserve" value="preserve" checked>
           <span>Bevara kapitalet</span>
@@ -102,7 +106,8 @@
       </div>
       <p class="field-hint" id="strategy-hint">Kapitalet ska aldrig minska i värde — du lever bara på avkastningen, inte av grundplåten.</p>
 
-      <div id="die-with-zero-fields" hidden>
+      <div class="expand-collapse" id="die-with-zero-fields">
+        <div class="expand-collapse-inner">
         <label class="field" data-modes="need">
           <span class="field__label">Startålder</span>
           <span class="field__value"><output id="out-targetAge">40</output> år</span>
@@ -114,6 +119,7 @@
           <span class="field__value"><output id="out-lifespan">90</output> år</span>
           <input type="range" id="lifespan" min="0" max="100" value="90" step="1">
         </label>
+        </div>
       </div>
     </div>
 
@@ -127,6 +133,7 @@
       </label>
 
       <div class="strategy-toggle">
+        <div class="strategy-toggle__indicator" aria-hidden="true"></div>
         <label class="strategy-toggle__option">
           <input type="radio" name="capitalMode" id="capital-combined" value="combined" checked>
           <span>Blandportfölj</span>
@@ -138,7 +145,8 @@
       </div>
       <p class="field-hint" id="capital-mode-hint">Förutsätter en generell blandportfölj med 60–70 % aktier, 30–40 % räntor, och 7 % förväntad avkastning nominellt.</p>
 
-      <div id="capital-split-fields" hidden>
+      <div class="expand-collapse" id="capital-split-fields">
+        <div class="expand-collapse-inner">
         <div class="asset-card">
           <label class="field">
             <span class="field__label">Aktier/fonder</span>
@@ -167,6 +175,7 @@
         </div>
 
         <p class="field-hint" id="blended-return-hint">Blandad avkastning: 6,9 % nominellt, givet din fördelning ovan.</p>
+        </div>
       </div>
     </div>
 
@@ -174,6 +183,7 @@
       <h2 class="field-group__title">Pension</h2>
 
       <div class="strategy-toggle">
+        <div class="strategy-toggle__indicator" aria-hidden="true"></div>
         <label class="strategy-toggle__option">
           <input type="radio" name="pensionMode" id="pension-ignore" value="ignore" checked>
           <span>Ignorera pension</span>
@@ -185,7 +195,8 @@
       </div>
       <p class="field-hint" id="pension-hint">Beräkningen bygger enbart på ditt eget sparande — ingen pension räknas in, även om du faktiskt har rätt till det.</p>
 
-      <div id="pension-fields" hidden>
+      <div class="expand-collapse" id="pension-fields">
+      <div class="expand-collapse-inner">
       <label class="field">
         <span class="field__label">Allmän pension per månad före skatt</span>
         <span class="field__value"><output id="out-pension1amount">15 000</output> <span class="unit"></span></span>
@@ -206,6 +217,7 @@
 
       <p class="field-hint field-hint--section">Kolla dina egna prognoser på <a href="https://www.minpension.se" target="_blank" rel="noopener">minpension.se</a> — men kom ihåg att ställa om prognosen till att sluta betala in och bara utgå från beloppet som finns där idag, annars räknar den med att du fortsätter jobba fram till riktåldern.</p>
       </div>
+      </div>
     </div>
 
     <div class="field-group">
@@ -216,7 +228,8 @@
         </svg>
       </button>
 
-      <div class="field-group__content" id="growth-content" hidden>
+      <div class="field-group__content" id="growth-content">
+        <div class="field-group__content-inner">
         <label class="field">
           <span class="field__label">Förväntad nominell avkastning: Blandportfölj</span>
           <span class="field__value"><output id="out-return">7</output> %</span>
@@ -240,6 +253,7 @@
           <span class="field__value"><output id="out-return-savings">2</output> %</span>
           <input type="range" id="return-savings" min="0" max="6" value="2" step="0.1">
         </label>
+        </div>
       </div>
     </div>
 
@@ -251,12 +265,14 @@
         </svg>
       </button>
 
-      <div class="field-group__content" id="inflation-content" hidden>
+      <div class="field-group__content" id="inflation-content">
+        <div class="field-group__content-inner">
         <label class="field">
           <span class="field__label">Förväntad inflation</span>
           <span class="field__value"><output id="out-inflation">2</output> %</span>
           <input type="range" id="inflation" min="0" max="8" value="2" step="0.1">
         </label>
+        </div>
       </div>
     </div>
 
@@ -268,7 +284,8 @@
         </svg>
       </button>
 
-      <div class="field-group__content" id="tax-content" hidden>
+      <div class="field-group__content" id="tax-content">
+        <div class="field-group__content-inner">
         <label class="field">
           <span class="field__label">Skatt på Blandportfölj (utgår från ISK)</span>
           <span class="field__value"><output id="out-tax-isk-blend">1,1</output> %</span>
@@ -304,12 +321,14 @@
           <span class="field__value"><output id="out-tax-pension2">32</output> %</span>
           <input type="range" id="tax-pension2" min="0" max="60" value="32" step="1">
         </label>
+        </div>
       </div>
     </div>
 
   </section>
 
   <div class="result-column">
+  <div class="result-column__sticky">
   <section class="panel panel--result">
     <div class="result">
       <p class="result__eyebrow" id="result-eyebrow">Du behöver</p>
@@ -349,6 +368,7 @@
     </label>
     <p class="field-hint field-hint--section">4% är den klassiska tumregeln, kalibrerad för ~30 års amerikansk pension. För tidig FIRE (längre horisont) och svenska/internationella marknader pekar senare forskning snarare mot 3–3,5%.</p>
   </section>
+  </div>
   </div>
 
 </main>

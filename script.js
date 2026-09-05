@@ -5,19 +5,41 @@ document.querySelectorAll('input, select').forEach(el => els[el.id] = el);
 document.querySelectorAll('output').forEach(el => els[el.id] = el);
 
 // Collapsible field-groups (Tillväxt & inflation, Skatter) — closed by
-// default (per the HTML's own hidden attribute); the chevron's rotation is
-// driven purely by aria-expanded in CSS, so this just needs to flip that and
-// the content's hidden state together.
+// default (per the HTML's lack of an initial .is-open class); the chevron's
+// rotation is driven purely by aria-expanded in CSS, so this just needs to
+// flip that and the content's .is-open class together. .is-open (not the
+// `hidden` attribute) is what actually animates the section open/closed —
+// see .field-group__content's grid-template-rows transition in style.css.
 document.querySelectorAll('.field-group__header').forEach(header => {
   header.addEventListener('click', () => {
+    // The section's height keeps changing for the whole 0.3s
+    // grid-template-rows transition (see .field-group__content in
+    // style.css) — confirmed directly that this can drag the page's
+    // scroll position along with it (measured window.scrollY moving by
+    // over 100px on its own while scrolled down, even with scroll
+    // anchoring disabled below). A single correction right after the
+    // click isn't enough, since the drift can appear partway through the
+    // animation, not just at the moment it starts — so this re-pins the
+    // scroll position every frame for the whole transition instead of
+    // just once, and stops once it's done so it never fights a real,
+    // deliberate scroll afterward.
+    const scrollX = window.scrollX, scrollY = window.scrollY;
     const expanded = header.getAttribute('aria-expanded') === 'true';
     header.setAttribute('aria-expanded', String(!expanded));
-    document.getElementById(header.getAttribute('aria-controls')).hidden = expanded;
+    document.getElementById(header.getAttribute('aria-controls')).classList.toggle('is-open', !expanded);
+
+    const start = performance.now();
+    function pinScroll(now) {
+      if (window.scrollX !== scrollX || window.scrollY !== scrollY) window.scrollTo(scrollX, scrollY);
+      if (now - start < 350) requestAnimationFrame(pinScroll);
+    }
+    requestAnimationFrame(pinScroll);
   });
 });
 
 let currentMode = 'need';
 const modesNav = document.querySelector('.modes');
+const modesIndicator = document.querySelector('.modes__indicator');
 const modeTabs = document.querySelectorAll('.modes__tab');
 const modeFields = document.querySelectorAll('[data-modes]');
 
@@ -38,6 +60,20 @@ function updateModesAlignment() {
     if (range.getClientRects().length > 1) wrapped = true;
   });
   modesNav.classList.toggle('is-wrapped', wrapped);
+  // wrapping can change every tab's width, so the indicator needs
+  // repositioning whenever this does.
+  updateTabIndicator();
+}
+
+// Sized/positioned from the currently active tab's own layout box —
+// offsetLeft/offsetWidth are relative to .modes (the nearest positioned
+// ancestor), and stay correct regardless of .modes' own horizontal scroll
+// position on mobile, so no scroll-offset math is needed here.
+function updateTabIndicator() {
+  const activeTab = document.querySelector('.modes__tab.is-active');
+  if (!activeTab || !modesIndicator) return;
+  modesIndicator.style.width = `${activeTab.offsetWidth}px`;
+  modesIndicator.style.transform = `translateX(${activeTab.offsetLeft}px)`;
 }
 
 window.addEventListener('resize', updateModesAlignment);
@@ -52,6 +88,7 @@ modeTabs.forEach(tab => {
     currentMode = tab.dataset.mode;
     modeTabs.forEach(t => t.classList.toggle('is-active', t === tab));
     modeTabs.forEach(t => t.setAttribute('aria-selected', t === tab ? 'true' : 'false'));
+    updateTabIndicator();
     updateVisibility();
     recalculate();
   });
@@ -74,7 +111,7 @@ function updateReturnVisibility() {
   // same rate tab 1 uses. Egen fördelning always shows the same three
   // %-sliders, rebalanced back to that split every year.
   const isSplit = document.querySelector('input[name="capitalMode"]:checked').value === 'split';
-  capitalSplitFields.hidden = !isSplit;
+  capitalSplitFields.classList.toggle('is-open', isSplit);
 
   // lengths matched (verified same line count on mobile and desktop) so
   // toggling the radio doesn't change this hint's height.
@@ -97,7 +134,7 @@ const strategyHint = document.getElementById('strategy-hint');
 document.querySelectorAll('input[name="strategy"]').forEach(radio => {
   radio.addEventListener('change', () => {
     const preserve = radio.value === 'preserve';
-    dieWithZeroFields.hidden = preserve;
+    dieWithZeroFields.classList.toggle('is-open', !preserve);
     strategyHint.textContent = preserve
       ? 'Kapitalet ska aldrig minska i värde — du lever bara på avkastningen, inte av grundplåten.'
       : 'Kapitalet får ta slut exakt vid din valda slutålder — du spenderar medvetet ner det till noll.';
@@ -110,7 +147,7 @@ const pensionHint = document.getElementById('pension-hint');
 document.querySelectorAll('input[name="pensionMode"]').forEach(radio => {
   radio.addEventListener('change', () => {
     const ignore = radio.value === 'ignore';
-    pensionFields.hidden = ignore;
+    pensionFields.classList.toggle('is-open', !ignore);
     pensionHint.textContent = ignore
       ? 'Beräkningen bygger enbart på ditt eget sparande — ingen pension räknas in, även om du faktiskt har rätt till det.'
       : 'Din allmänna pension och tjänstepension räknas in och minskar hur mycket du själv behöver ta ur ditt kapital.';
@@ -127,7 +164,7 @@ const withdrawTimingHint = document.getElementById('withdraw-timing-hint');
 document.querySelectorAll('input[name="withdrawTiming"]').forEach(radio => {
   radio.addEventListener('change', () => {
     const wait = radio.value === 'wait';
-    withdrawWaitFields.hidden = !wait;
+    withdrawWaitFields.classList.toggle('is-open', wait);
     withdrawTimingHint.textContent = wait
       ? 'Kapitalet får växa och du fortsätter spara i ytterligare några år innan uttaget beräknas.'
       : 'Uttaget beräknas utifrån ditt kapital redan idag, som om du gick i FIRE direkt utan att vänta eller spara mer.';
@@ -299,6 +336,62 @@ function fireLevelFor(spend) {
   return level;
 }
 
+// Lysa-trial: paints each range input's own filled progress portion (in the
+// accent gradient) up to its current value, with a hard cutoff to the plain
+// track color right after — the reference artboard's `.track-fill`, done
+// via a two-stop-at-the-same-position gradient trick since a native range
+// input has no separate fill element to style. Re-run on every
+// recalculate() (via syncDisplays() below) so it stays in sync with every
+// slider, not just the one just dragged.
+function updateSliderFills() {
+  document.querySelectorAll('input[type="range"]').forEach(el => {
+    const min = +el.min || 0, max = +el.max || 100, val = +el.value;
+    const pct = max > min ? ((val - min) / (max - min)) * 100 : 0;
+    el.style.background = `linear-gradient(to right, var(--accent), var(--accent-end) ${pct}%, var(--rule) ${pct}%)`;
+  });
+}
+
+// Same sliding-indicator pattern as updateTabIndicator() above, generalized
+// to every .strategy-toggle on the page (there are several — capital mode,
+// strategy, pension, withdraw-timing) — sized/positioned from whichever
+// option is currently checked, so the fill visibly slides between options
+// instead of each one fading its own background in/out independently.
+function updateToggleIndicators() {
+  document.querySelectorAll('.strategy-toggle').forEach(toggle => {
+    // a toggle on a currently-hidden tab (e.g. "Gå i FIRE nu" on tabs 1-2)
+    // has offsetParent === null, and offsetWidth/offsetLeft on anything
+    // inside it read 0 — writing that through would corrupt the indicator
+    // to width:0/translateX(0) while unseen, and since the transition is
+    // always active, switching to that tab would then visibly animate it
+    // from that stale 0 to its real position, even though nothing was
+    // actually toggled. Skipping the write entirely while hidden leaves
+    // whatever was last correctly measured in place, ready to reappear
+    // instantly and already correct the moment the tab becomes visible.
+    if (toggle.offsetParent === null) return;
+    const indicator = toggle.querySelector('.strategy-toggle__indicator');
+    const checkedOption = toggle.querySelector('.strategy-toggle__option:has(input:checked)');
+    if (!indicator || !checkedOption) return;
+
+    // the very first time this specific indicator is positioned — whether
+    // it was visible from page load or this is its first reveal after
+    // being hidden — it has no inline width/transform yet, so animating
+    // from that blank state to the real one is the same kind of unwanted
+    // "slides in on its own" motion the offsetParent check above prevents
+    // for re-reveals, just showing up on the very first one instead.
+    // Positioning it once with transitions off, then restoring them,
+    // keeps every later real toggle animating normally.
+    const firstTime = !indicator.dataset.positioned;
+    if (firstTime) indicator.style.transition = 'none';
+    indicator.style.width = `${checkedOption.offsetWidth}px`;
+    indicator.style.transform = `translateX(${checkedOption.offsetLeft}px)`;
+    if (firstTime) {
+      indicator.offsetHeight; // force layout so the transition:none above is committed before it's removed
+      indicator.style.transition = '';
+      indicator.dataset.positioned = 'true';
+    }
+  });
+}
+
 // keep all range outputs and unit labels in sync
 function syncDisplays() {
   const money = currencyMeta().symbol;
@@ -326,6 +419,8 @@ function syncDisplays() {
   els['out-tax-pension2'].textContent = els['tax-pension2'].value;
   document.querySelectorAll('.field .unit').forEach(u => u.textContent = money);
   updateAllocationDisplay();
+  updateSliderFills();
+  updateToggleIndicators();
 }
 
 // ---------- Simulation engine ----------
@@ -817,7 +912,13 @@ function niceMoneyLabel(n) {
 
 function drawChart(path, failedAtAge) {
   svg.innerHTML = '';
-  const maxBalance = Math.max(...path.map(p => p.balance), 1);
+  // A little headroom above the actual peak — without it, a flat "Bevara
+  // kapitalet" line sitting exactly at the max value lands right on the
+  // topmost gridline (same y-position, same-ish color), reading as if the
+  // line weren't drawn at all. Kept small on purpose: the line should still
+  // reach right up to the top and read as touching/disappearing into it,
+  // not float with visible daylight above it.
+  const maxBalance = Math.max(...path.map(p => p.balance), 1) * 1.015;
   const minAge = path[0].age, maxAge = path[path.length - 1].age;
 
   const x = age => PAD_LEFT + (age - minAge) / (maxAge - minAge || 1) * (W - PAD_LEFT - PAD_RIGHT);
@@ -843,12 +944,30 @@ function drawChart(path, failedAtAge) {
     label.setAttribute('y', yPos);
     label.setAttribute('text-anchor', 'end');
     label.setAttribute('dominant-baseline', 'middle');
-    label.setAttribute('font-family', 'var(--mono)');
+    label.setAttribute('font-family', 'var(--sans)');
     label.setAttribute('font-size', '10');
     label.setAttribute('fill', 'var(--ink-soft)');
     label.textContent = niceMoneyLabel(value);
     svg.appendChild(label);
   }
+
+  // Lysa-trial: gradient stroke so the chart line picks up --accent-gradient
+  // like the pill switches and field values, instead of a flat accent fill.
+  const defs = document.createElementNS(NS, 'defs');
+  const lineGradient = document.createElementNS(NS, 'linearGradient');
+  lineGradient.setAttribute('id', 'chart-line-gradient');
+  lineGradient.setAttribute('x1', '0%'); lineGradient.setAttribute('y1', '0%');
+  lineGradient.setAttribute('x2', '100%'); lineGradient.setAttribute('y2', '0%');
+  const stop1 = document.createElementNS(NS, 'stop');
+  stop1.setAttribute('offset', '0%');
+  stop1.setAttribute('stop-color', 'var(--accent)');
+  const stop2 = document.createElementNS(NS, 'stop');
+  stop2.setAttribute('offset', '100%');
+  stop2.setAttribute('stop-color', 'var(--accent-end)');
+  lineGradient.appendChild(stop1);
+  lineGradient.appendChild(stop2);
+  defs.appendChild(lineGradient);
+  svg.appendChild(defs);
 
   const linePoints = path.map(p => `${x(p.age)},${y(p.balance)}`).join(' ');
   const areaPoints = `${x(minAge)},${y(0)} ${linePoints} ${x(maxAge)},${y(0)}`;
@@ -861,8 +980,8 @@ function drawChart(path, failedAtAge) {
   const line = document.createElementNS(NS, 'polyline');
   line.setAttribute('points', linePoints);
   line.setAttribute('fill', 'none');
-  line.setAttribute('stroke', 'var(--ink)');
-  line.setAttribute('stroke-width', '2');
+  line.setAttribute('stroke', 'url(#chart-line-gradient)');
+  line.setAttribute('stroke-width', '3');
   svg.appendChild(line);
 
   if (failedAtAge !== null) {
@@ -1104,16 +1223,21 @@ function recalculate() {
   // leave the very last point sitting a fraction of a year off lifespan.
   const endAge = Math.round(chartResult.path[chartResult.path.length - 1].age);
 
-  document.getElementById('dt-lasts').textContent = fireStartAge !== null ? `Kapital vid ${fireStartAge} år` : 'Kapital vid FIRE';
+  // "Vid X år" rather than "Kapital vid X år" — shortened per the
+  // Lysa-trial reference artboard's `.stat-dt` ("Vid 40 år" etc.); amounts
+  // below use niceMoneyLabel() (the same "X,X Mkr" abbreviation the chart's
+  // own axis labels use) rather than the full kr figure, matching that
+  // artboard's `.stat-dd` ("8,09 Mkr" etc.).
+  document.getElementById('dt-lasts').textContent = fireStartAge !== null ? `Vid ${fireStartAge} år` : 'Vid FIRE';
   document.getElementById('stat-lasts').textContent =
-    fireStartAge !== null ? fmtMoney(capitalAtAge(chartResult.path, fireStartAge)) : '—';
+    fireStartAge !== null ? niceMoneyLabel(capitalAtAge(chartResult.path, fireStartAge)) : '—';
 
-  document.getElementById('dt-withdrawal').textContent = `Kapital vid ${pensionAgeSetting} år`;
-  document.getElementById('stat-withdrawal').textContent = fmtMoney(capitalAtAge(chartResult.path, pensionAgeSetting));
+  document.getElementById('dt-withdrawal').textContent = `Vid ${pensionAgeSetting} år`;
+  document.getElementById('stat-withdrawal').textContent = niceMoneyLabel(capitalAtAge(chartResult.path, pensionAgeSetting));
 
-  document.getElementById('dt-pension').textContent = `Kapital vid ${endAge} år`;
+  document.getElementById('dt-pension').textContent = `Vid ${endAge} år`;
   document.getElementById('stat-pension').textContent =
-    fmtMoney(chartResult.path[chartResult.path.length - 1].balance);
+    niceMoneyLabel(chartResult.path[chartResult.path.length - 1].balance);
 
   drawChart(chartResult.path, chartResult.failedAtAge);
 }
