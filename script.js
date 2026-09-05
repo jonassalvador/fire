@@ -121,9 +121,18 @@ if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(updateTabLayout);
 }
 
-// track width (and so every slider thumb visual's x position) can change
-// on resize too.
+// track width/position (and so every slider thumb visual's x/y) can change
+// on resize, or once the label font swaps in and reflows a wrapped label
+// above it — confirmed directly as a real, not just theoretical, gap: a
+// field whose label happens to wrap to 3 lines shifted its slider down
+// once the real font loaded, and with nothing re-running this after that
+// point, the visual thumb stayed stuck at its pre-swap position (visibly
+// well above the actual, now-lower track) for the rest of the page's
+// life.
 window.addEventListener('resize', () => updateSliderThumbVisuals());
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(updateSliderThumbVisuals);
+}
 
 modeTabs.forEach(tab => {
   tab.addEventListener('click', () => {

@@ -644,12 +644,21 @@ body {
 
 @media (pointer: coarse) {
   /* the bigger touch thumb (--thumb-size: 26px vs 20px) bleeds further
-     above the track, landing closer to the label/value row above it than
-     the same margin leaves room for on a fine pointer — a bit of extra
-     top margin here restores that breathing room specifically where the
-     thumb is actually bigger. */
+     above AND below the track, landing closer to both the label/value row
+     above it and the help text below than the same margins leave room for
+     on a fine pointer — extra margin on both sides here restores that
+     breathing room specifically where the thumb is actually bigger.
+     margin-bottom is a new margin (there wasn't one at all before this),
+     not a bump to an existing one, since the gap to a following
+     .field-hint was previously coming entirely from .field's own
+     margin-bottom collapsing against the hint's margin-top — this adds to
+     that rather than fighting the collapse, since a grid item's own
+     margin (the input is one, inside .field's grid) doesn't collapse with
+     anything and so reliably extends .field's own rendered height by
+     exactly this much. */
   .field input[type="range"] {
     margin-top: 14px;
+    margin-bottom: 8px;
   }
 }
 
