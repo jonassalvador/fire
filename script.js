@@ -102,12 +102,61 @@ function updateTabWrapping() {
 // unambiguous signal instead: once the sentinel scrolls above the viewport,
 // .modes can only still be visible at top:0 because it's now actually
 // pinned there.
+let tabsStuck = false;
+let resultAnswerVisible = false;
+// the floating pill (see .floating-answer in style.css) only makes sense
+// while BOTH are true: the tab bar is actually pinned (otherwise the page
+// hasn't scrolled past the real answer's own neighborhood yet) AND the
+// real answer further down hasn't scrolled into view on its own (no point
+// floating a duplicate of something already on screen).
+function updateFloatingAnswerVisibility() {
+  const pill = document.getElementById('floating-answer');
+  if (pill) pill.classList.toggle('is-visible', tabsStuck && !resultAnswerVisible);
+}
+
 const modesSentinel = document.querySelector('.modes__sentinel');
 if (modesSentinel && 'IntersectionObserver' in window) {
   new IntersectionObserver(
-    ([entry]) => modesNav.classList.toggle('is-stuck', !entry.isIntersecting && entry.boundingClientRect.top < 0),
+    ([entry]) => {
+      tabsStuck = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+      modesNav.classList.toggle('is-stuck', tabsStuck);
+      updateFloatingAnswerVisibility();
+    },
     { threshold: 0 }
   ).observe(modesSentinel);
+}
+
+// .result (the real #result-eyebrow/#result-figure pair) is "visible" for
+// the pill's purposes the moment its top has scrolled to or above the
+// viewport's own bottom edge — covers both it currently being on screen
+// (top somewhere between 0 and innerHeight) and it having already scrolled
+// past above (top negative) in one plain comparison, recomputed fresh from
+// live geometry on every scroll rather than cached from an
+// IntersectionObserver snapshot. That matters here specifically: tried an
+// IntersectionObserver on this first, and confirmed directly that a single
+// large/fast scroll can jump clean over the point where it would have
+// fired (observers only report state at whatever points the browser
+// happens to evaluate them, not continuously), silently leaving the pill
+// re-shown on a page that had actually already scrolled well past the
+// real answer.
+const resultAnswer = document.querySelector('.result');
+function updateResultAnswerVisible() {
+  if (!resultAnswer) return;
+  resultAnswerVisible = resultAnswer.getBoundingClientRect().top < window.innerHeight;
+  updateFloatingAnswerVisibility();
+}
+if (resultAnswer) {
+  let scrollScheduled = false;
+  window.addEventListener('scroll', () => {
+    if (scrollScheduled) return;
+    scrollScheduled = true;
+    requestAnimationFrame(() => {
+      scrollScheduled = false;
+      updateResultAnswerVisible();
+    });
+  }, { passive: true });
+  window.addEventListener('resize', updateResultAnswerVisible);
+  updateResultAnswerVisible();
 }
 
 // tab widths (and so wrapping and indicator position alike) can change on
@@ -1428,6 +1477,12 @@ function recalculate() {
   document.getElementById('result-figure').textContent = headline;
   document.getElementById('result-caption').textContent = caption;
   document.getElementById('comparison-result').textContent = comparisonText;
+  // keeps the floating answer pill (see .floating-answer in style.css) in
+  // sync with whichever tab's actual result this is — it only ever shows
+  // the eyebrow + headline, never the caption, so no separate branch is
+  // needed here for that.
+  document.getElementById('floating-answer-eyebrow').textContent = eyebrow;
+  document.getElementById('floating-answer-figure').textContent = headline;
 
   // three consistent checkpoints, in every mode: capital when FIRE starts,
   // when pension kicks in, and at the end age — labels show the actual age.

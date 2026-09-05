@@ -375,6 +375,17 @@
   <p>Byggd i all hast, på skoj. Alla siffror är förenklade uppskattningar — inte finansiell rådgivning.</p>
 </footer>
 
+<!-- mirrors #result-eyebrow/#result-figure (see script.js) — a floating,
+     always-visible stand-in for the real answer further down the page,
+     shown only on narrow viewports (see .floating-answer in style.css)
+     where that real answer isn't kept on-screen by .result-column__sticky
+     the way it is on desktop. aria-hidden since it's a pure visual
+     duplicate of content a screen reader already has. -->
+<div class="floating-answer" id="floating-answer" aria-hidden="true">
+  <p class="floating-answer__eyebrow" id="floating-answer-eyebrow"></p>
+  <p class="floating-answer__figure" id="floating-answer-figure"></p>
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>
