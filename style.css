@@ -438,9 +438,15 @@ body {
      box outward by 24px via margin, then padding the same 24px back on the
      inside, keeps every child's rendered position identical to before (the
      two exactly cancel out) while giving the clipping boundary itself 24px
-     of slack on each side to clip into instead of clipping the thumb. */
-  margin: 0 -24px;
-  padding: 0 24px;
+     of slack on each side to clip into instead of clipping the thumb.
+     The bottom gets the same treatment, on its own — this is the plain
+     geometric half-height overflow every thumb has regardless of engine,
+     kept separate from (and much smaller than) the transform/filter
+     compositing-layer clipping bug the thumb's own rest-state transform
+     was actually causing (removed — see the thumb rule itself), which sat
+     tight against the thumb no matter how much room was added out here. */
+  margin: 0 -24px -16px;
+  padding: 0 24px 16px;
 }
 
 /* fades in/out over the same 0.3s as the outer grid-row slide above, so the
@@ -456,33 +462,26 @@ body {
   opacity: 1;
 }
 
-/* the last visible thing inside a collapsible/expandable wrapper sits flush
-   against its bottom edge — clearance so a trailing slider's thumb isn't
-   clipped by that wrapper's overflow:hidden. Sized for the biggest the
-   thumb ever actually gets: a touch pointer's already-larger 26px rest
-   size (itself already ~10px past the 6px track's own edge, centered),
-   grown further by the ~1.2x transform:scale() press/active effect, plus
-   its drop-shadow's own blur — around 17px worst case, 20px here for a bit
-   of spare. `> *:last-child` rather than `.field:last-child` specifically,
-   since not every one of these sections ends in a slider —
-   capital-split-fields and pension-fields end in a .field-hint instead,
-   and the fix needs to reach whichever element is actually last. This has
-   to be a child's own margin, not padding on the wrapper itself — padding
-   is part of the wrapper's own box and always renders at its declared
-   size, so it would keep the collapsed row a few px tall instead of truly
-   0, showing a sliver of content even when closed; a child's margin has no
-   such floor. */
-/* targets the specific element classes (not `> *`) combined with the
-   wrapper class, so this reliably outweighs .field:last-child and
-   .field-hint:last-child below (each 0,2,0 same as a bare `> *:last-child`
-   would be) regardless of source order, instead of depending on which
-   happens to come later in the file. */
-.field-group__content-inner > .field:last-child,
-.field-group__content-inner > .field-hint:last-child,
-.expand-collapse-inner > .field:last-child,
-.expand-collapse-inner > .field-hint:last-child {
-  margin-bottom: 20px;
-}
+/* No special last-child margin override here any more — a collapsible
+   section's last field just falls through to the plain
+   .field:last-child/.field-hint:last-child rules further down (0,2,0
+   specificity, same as these would have been), same as every
+   non-collapsible section, so every section ends with identical bottom
+   spacing: the .field-group card's own 28px padding, nothing stacked on
+   top of it. An earlier version gave collapsible sections' last field a
+   bigger special-cased margin instead, specifically to keep a trailing
+   slider's thumb from being clipped by the wrapper's overflow:hidden —
+   raised twice (8px, then 28px) and still reported as clipped both times,
+   which was the tell that a child's margin was never actually the
+   mechanism: it pushes the WRAPPER's own bottom edge down, but the real
+   clip turned out to be happening right at the thumb itself (a
+   transform+filter compositing-layer clip — see the thumb rule's own
+   comment) that sits at a fixed distance from the thumb no matter how
+   much room exists further out. The wrapper now gets its own small,
+   invisible bottom bleed instead (see
+   .field-group__content-inner/.expand-collapse-inner above) for the
+   plain, engine-independent geometric overflow every thumb has regardless
+   of that bug. */
 
 /* collapsed (content hidden) — the header is the only visible thing left in
    the group, so it needs the same last-visible-element zeroing every other
@@ -697,7 +696,21 @@ body {
      shadow layer, so it isn't affected by that quirk. */
   filter: drop-shadow(0 1px 3px rgba(22, 23, 24, 0.15)) drop-shadow(0 1px 2px rgba(22, 23, 24, 0.1));
   cursor: pointer;
-  transform: scale(1);
+  /* no transform at rest — an explicit transform: scale(1) sat here for a
+     while, purely as a same-property starting point for the :active
+     transform to transition from. It's very likely what caused the
+     drop-shadow above to get clipped hard against the thumb's own edges on
+     a real iPhone (reported back as cut off well before any surrounding
+     ancestor's own edge, which ruled out overflow:hidden on some ancestor
+     as the cause): a transform, even the identity one, can make a browser
+     promote the element onto its own composited layer, and that layer's
+     bounds — sized to the thumb's own plain box, not the drop-shadow's
+     bigger visual footprint — became the thing actually doing the
+     clipping. Removing it doesn't need a matching fix on the :active
+     transition below: animating from no transform at all to
+     transform: scale(1.2) interpolates exactly the same way animating
+     from scale(1) would (both are the identity transform as a starting
+     value), so nothing about the press animation itself changes. */
   transition: transform 0.15s ease, border-color 0.15s ease, filter 0.15s ease;
 }
 
@@ -709,18 +722,17 @@ body {
 
 @media (hover: hover) and (pointer: fine) {
   .field input[type="range"]:hover::-webkit-slider-thumb {
-    /* a brightening of the ring itself — a lighter border plus a soft blue
-       glow layered on top of the two rest-state drop-shadows (filter
-       replaces the whole property per rule, not just adds to it, so all
-       three have to be repeated here) — rather than a fill-color change.
-       Two earlier attempts at a fill (a translucent gray, then a solid
-       one) were both dropped: a fill competes with the border for
-       attention instead of reading as one ring lighting up. */
+    /* a brightening of the ring itself, not a fill-color change — two
+       earlier fill attempts (translucent gray, then solid gray) both read
+       as competing with the border instead of one ring lighting up. A
+       third attempt stacked an extra blue drop-shadow glow on top of the
+       two rest-state ones for more of a "lighting up" effect, but that
+       misbehaved in real Safari (stacking multiple drop-shadow() filter
+       functions, especially on a native-control pseudo-element mid
+       :hover-triggered transition, is a known rough edge there) — reduced
+       back to just the border-color change, which has none of that
+       cross-function-filter surface area. */
     border-color: var(--accent-end);
-    filter:
-      drop-shadow(0 1px 3px rgba(22, 23, 24, 0.15))
-      drop-shadow(0 1px 2px rgba(22, 23, 24, 0.1))
-      drop-shadow(0 0 4px rgba(24, 64, 227, 0.6));
   }
 }
 
@@ -747,7 +759,7 @@ body {
      diverge from that one's approach. */
   filter: drop-shadow(0 1px 3px rgba(22, 23, 24, 0.15)) drop-shadow(0 1px 2px rgba(22, 23, 24, 0.1));
   cursor: pointer;
-  transform: scale(1);
+  /* no transform at rest — see the -webkit- rule's own comment for why. */
   transition: transform 0.15s ease, border-color 0.15s ease, filter 0.15s ease;
 }
 
@@ -759,13 +771,9 @@ body {
 
 @media (hover: hover) and (pointer: fine) {
   .field input[type="range"]:hover::-moz-range-thumb {
-    /* same brightened-ring-plus-glow treatment as the -webkit- rule above,
-       instead of a fill-color change. */
+    /* same border-only brightening as the -webkit- rule above — see its
+       comment for why the glow this used to add on top was dropped. */
     border-color: var(--accent-end);
-    filter:
-      drop-shadow(0 1px 3px rgba(22, 23, 24, 0.15))
-      drop-shadow(0 1px 2px rgba(22, 23, 24, 0.1))
-      drop-shadow(0 0 4px rgba(24, 64, 227, 0.6));
   }
 }
 
@@ -1045,7 +1053,8 @@ body {
   margin: 32px 0 0;
   padding: 22px 24px;
   background: var(--blush);
-  border-radius: 12px;
+  /* matches .asset-card's sharper radius, not the outer cards' softer 12px. */
+  border-radius: 8px;
 }
 
 /* Lysa-trial: matches the reference artboard's `.stat-dt` — plain sans,
