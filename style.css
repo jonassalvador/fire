@@ -996,15 +996,16 @@ body {
 /* only relevant below the same 880px breakpoint where .result-column__sticky
    (above) gives up and goes position: static — above it, the real answer
    is already kept on-screen the whole time, so a floating stand-in would
-   be pure clutter. Below it, shown/hidden by scroll position (see the
-   tabsStuck/resultAnswerVisible tracking in script.js: visible only while
-   the sticky tab bar is pinned AND the real #result-figure further down
-   hasn't scrolled into view yet). Fixed width via left/right (not a
-   centered auto-width box) — inset from each edge by DOUBLE whatever
-   body's own side padding is at that breakpoint (not the same amount:
-   the pill is meant to float clear of the cards' own edges, with a full
-   extra margin's worth of breathing room on each side, not line up flush
-   with them), so it stays in sync if that padding ever changes. */
+   be pure clutter. Below it, always visible, like an iOS tab bar (an
+   earlier version showed/hid it by scroll position instead — dropped).
+   Fixed width via left/right (not a centered auto-width box) — inset from
+   each edge, and from the bottom, by DOUBLE whatever body's own side
+   padding is at that breakpoint (not the same amount: the pill is meant
+   to float clear of the cards' own edges, with a full extra margin's
+   worth of breathing room on every side, not line up flush with them) —
+   so it stays in sync if that padding ever changes, and reads as evenly
+   inset on all three sides instead of hugging the bottom edge closer than
+   the left/right ones. */
 .floating-answer {
   display: none;
 }
@@ -1018,23 +1019,12 @@ body {
     position: fixed;
     left: 64px;
     right: 64px;
-    bottom: 20px;
+    bottom: 64px;
     z-index: 30;
     padding: 16px 22px;
     border-radius: 99px;
-    background: var(--accent);
+    background: var(--accent-gradient);
     box-shadow: 0 12px 32px rgba(22, 23, 24, 0.18);
-    pointer-events: none;
-    opacity: 0;
-    /* hidden by sliding down + out rather than just fading, so it reads as
-       physically retreating off the bottom edge it's anchored to. */
-    transform: translateY(calc(100% + 20px));
-    transition: transform 0.3s ease, opacity 0.3s ease;
-  }
-
-  .floating-answer.is-visible {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -1042,6 +1032,7 @@ body {
   .floating-answer {
     left: 32px;
     right: 32px;
+    bottom: 32px;
   }
 }
 

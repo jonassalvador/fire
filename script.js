@@ -102,61 +102,12 @@ function updateTabWrapping() {
 // unambiguous signal instead: once the sentinel scrolls above the viewport,
 // .modes can only still be visible at top:0 because it's now actually
 // pinned there.
-let tabsStuck = false;
-let resultAnswerVisible = false;
-// the floating pill (see .floating-answer in style.css) only makes sense
-// while BOTH are true: the tab bar is actually pinned (otherwise the page
-// hasn't scrolled past the real answer's own neighborhood yet) AND the
-// real answer further down hasn't scrolled into view on its own (no point
-// floating a duplicate of something already on screen).
-function updateFloatingAnswerVisibility() {
-  const pill = document.getElementById('floating-answer');
-  if (pill) pill.classList.toggle('is-visible', tabsStuck && !resultAnswerVisible);
-}
-
 const modesSentinel = document.querySelector('.modes__sentinel');
 if (modesSentinel && 'IntersectionObserver' in window) {
   new IntersectionObserver(
-    ([entry]) => {
-      tabsStuck = !entry.isIntersecting && entry.boundingClientRect.top < 0;
-      modesNav.classList.toggle('is-stuck', tabsStuck);
-      updateFloatingAnswerVisibility();
-    },
+    ([entry]) => modesNav.classList.toggle('is-stuck', !entry.isIntersecting && entry.boundingClientRect.top < 0),
     { threshold: 0 }
   ).observe(modesSentinel);
-}
-
-// .result (the real #result-eyebrow/#result-figure pair) is "visible" for
-// the pill's purposes the moment its top has scrolled to or above the
-// viewport's own bottom edge — covers both it currently being on screen
-// (top somewhere between 0 and innerHeight) and it having already scrolled
-// past above (top negative) in one plain comparison, recomputed fresh from
-// live geometry on every scroll rather than cached from an
-// IntersectionObserver snapshot. That matters here specifically: tried an
-// IntersectionObserver on this first, and confirmed directly that a single
-// large/fast scroll can jump clean over the point where it would have
-// fired (observers only report state at whatever points the browser
-// happens to evaluate them, not continuously), silently leaving the pill
-// re-shown on a page that had actually already scrolled well past the
-// real answer.
-const resultAnswer = document.querySelector('.result');
-function updateResultAnswerVisible() {
-  if (!resultAnswer) return;
-  resultAnswerVisible = resultAnswer.getBoundingClientRect().top < window.innerHeight;
-  updateFloatingAnswerVisibility();
-}
-if (resultAnswer) {
-  let scrollScheduled = false;
-  window.addEventListener('scroll', () => {
-    if (scrollScheduled) return;
-    scrollScheduled = true;
-    requestAnimationFrame(() => {
-      scrollScheduled = false;
-      updateResultAnswerVisible();
-    });
-  }, { passive: true });
-  window.addEventListener('resize', updateResultAnswerVisible);
-  updateResultAnswerVisible();
 }
 
 // tab widths (and so wrapping and indicator position alike) can change on
@@ -543,22 +494,35 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
     // handler) still works normally, and still gets a real indicator, on
     // the visible dot itself (see :focus-visible + .slider-thumb-visual in
     // style.css).
-    // keeps tracking even if the finger slides outside the track — wrapped
-    // defensively since a pointerId the browser doesn't recognize as an
-    // active pointer throws here (confirmed directly: an uncaught
-    // NotFoundError from this exact call silently skipped the rest of the
-    // handler below, including attaching the move/up listeners, so the
-    // drag did nothing at all) rather than failing gracefully. A real
-    // touch's own pointerId should never hit that, but there's no reason
-    // to let the whole gesture ride on it regardless.
+    // best-effort — wrapped defensively since a pointerId the browser
+    // doesn't recognize as an active pointer throws here (confirmed
+    // directly: an uncaught NotFoundError from this exact call silently
+    // skipped the rest of the handler below at the time, before move/up
+    // were moved to window as they are now). Not load-bearing any more
+    // either way (see below), so a failure here has nothing to cascade
+    // into.
     try { input.setPointerCapture(e.pointerId); } catch {}
 
     const min = +input.min || 0, max = +input.max || 100, step = +input.step || 1;
     const trackWidth = input.getBoundingClientRect().width;
     const startValue = +input.value;
     const startX = e.clientX;
+    const pointerId = e.pointerId;
 
+    // move/up listen on window, not input — confirmed directly this
+    // matters: dragging off the input's own (6px-tall) box occasionally
+    // left it not receiving pointermove/pointerup at all (pointer capture
+    // not reliably keeping events routed there once the finger drifts far
+    // enough vertically), so this handler's own move/up cleanup never ran
+    // — leaving the touch's eventual release to fall through to the
+    // browser's native default after all, jumping the value to wherever
+    // the finger ended up. Listening on window instead means the drag
+    // keeps working (and still ends cleanly) no matter where on screen the
+    // finger actually is for the rest of the gesture; the pointerId check
+    // keeps this from reacting to an unrelated second touch elsewhere on
+    // the page in the meantime.
     function onMove(moveEvent) {
+      if (moveEvent.pointerId !== pointerId) return;
       const deltaValue = ((moveEvent.clientX - startX) / trackWidth) * (max - min);
       const next = snapToStep(startValue + deltaValue, min, max, step);
       if (next !== +input.value) {
@@ -566,14 +530,15 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
         input.dispatchEvent(new Event('input', { bubbles: true }));
       }
     }
-    function onUp() {
-      input.removeEventListener('pointermove', onMove);
-      input.removeEventListener('pointerup', onUp);
-      input.removeEventListener('pointercancel', onUp);
+    function onUp(upEvent) {
+      if (upEvent.pointerId !== pointerId) return;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     }
-    input.addEventListener('pointermove', onMove);
-    input.addEventListener('pointerup', onUp);
-    input.addEventListener('pointercancel', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   });
 });
 
