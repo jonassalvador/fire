@@ -511,8 +511,32 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
   input.addEventListener('mousedown', guardAgainstCompatibilityEvent);
   input.addEventListener('click', guardAgainstCompatibilityEvent);
 
+  // tracks the in-progress drag's own window listeners, if any, so a new
+  // touch can forcibly tear down a previous one that never cleaned up
+  // after itself — see the pointerdown handler below for why that can
+  // happen and what it looks like when it does.
+  let endActiveDrag = null;
+
   input.addEventListener('pointerdown', e => {
     if (e.pointerType !== 'touch') return;
+    // if a previous drag's own pointerup/pointercancel never fired —
+    // plausible under fast repeated taps, or a drag that gets interrupted
+    // mid-gesture by the page attempting to scroll instead — its onMove/
+    // onUp closures stay attached to window forever, each still watching
+    // for its own original pointerId. Touch pointerIds can get reused for
+    // a later, entirely new touch, and if that happens, the stale
+    // listener fires anyway, moving the value by a delta measured against
+    // its own long-stale start position instead of this new touch's real
+    // one — which looks exactly like an unexplained jump, and was
+    // reported back as still happening after this same bug's more likely
+    // causes (native compatibility events) were already guarded against.
+    // Tearing down whatever the previous gesture left behind before this
+    // one starts anything of its own closes that off regardless of
+    // whether that theory is actually what's happening on a real device.
+    if (endActiveDrag) {
+      endActiveDrag();
+      endActiveDrag = null;
+    }
     e.preventDefault(); // stop the native jump-to-touch-point
     // armed for a short window after every touch pointerdown (see the two
     // listeners and their own comment above) — self-clears either the
@@ -595,12 +619,17 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
         input.dispatchEvent(new Event('input', { bubbles: true }));
       }
     }
-    function onUp(upEvent) {
-      if (upEvent.pointerId !== pointerId) return;
+    function cleanup() {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      endActiveDrag = null;
     }
+    function onUp(upEvent) {
+      if (upEvent.pointerId !== pointerId) return;
+      cleanup();
+    }
+    endActiveDrag = cleanup;
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
