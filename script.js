@@ -5,6 +5,16 @@
 // its mere presence is what turns :active on.
 document.addEventListener('touchstart', () => {}, { passive: true });
 
+// Pinch- and double-tap-zoom are both already blocked by the viewport meta
+// tag's own maximum-scale=1/user-scalable=no (see index.html) — a JS-based
+// gesturestart/multi-touch-touchmove alternative was tried here for a
+// while, on the theory that the meta tag's own zoom lock was what killed
+// the page's native scroll bounce. It wasn't: bounce turned out to be
+// missing only in this tool's own preview (confirmed by testing the live
+// site directly in real Safari and Chrome, where the meta-tag version
+// bounces fine) — so the simpler meta-tag-only approach is back, with
+// nothing extra needed here.
+
 // ---------- DOM refs ----------
 
 const els = {};
@@ -977,11 +987,24 @@ function drawChart(path, failedAtAge) {
 
   // Lysa-trial: gradient stroke so the chart line picks up --accent-gradient
   // like the pill switches and field values, instead of a flat accent fill.
+  // gradientUnits is explicitly userSpaceOnUse (plain chart-pixel
+  // coordinates), not the SVG default objectBoundingBox (percentages of the
+  // polyline's own bounding box) — a "Bevara kapitalet" balance that stays
+  // exactly flat renders every point at the same y, collapsing the
+  // polyline's bounding box to zero height, and the SVG spec says a
+  // zero-width-or-height objectBoundingBox gradient simply isn't painted at
+  // all — the line was rendering with a stroke that resolved to nothing,
+  // not merely a wrong color (confirmed directly: getBBox() on the line
+  // showed a real 568px width but exactly 0 height whenever the balance
+  // curve was flat). userSpaceOnUse coordinates aren't tied to the
+  // element's own bounding box, so this can't happen regardless of how
+  // flat the line is.
   const defs = document.createElementNS(NS, 'defs');
   const lineGradient = document.createElementNS(NS, 'linearGradient');
   lineGradient.setAttribute('id', 'chart-line-gradient');
-  lineGradient.setAttribute('x1', '0%'); lineGradient.setAttribute('y1', '0%');
-  lineGradient.setAttribute('x2', '100%'); lineGradient.setAttribute('y2', '0%');
+  lineGradient.setAttribute('gradientUnits', 'userSpaceOnUse');
+  lineGradient.setAttribute('x1', PAD_LEFT); lineGradient.setAttribute('y1', 0);
+  lineGradient.setAttribute('x2', W - PAD_RIGHT); lineGradient.setAttribute('y2', 0);
   const stop1 = document.createElementNS(NS, 'stop');
   stop1.setAttribute('offset', '0%');
   stop1.setAttribute('stop-color', 'var(--accent)');

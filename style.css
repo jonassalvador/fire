@@ -96,6 +96,15 @@ body {
   display: flex;
   gap: 0;
   border-bottom: 2px solid var(--rule);
+  /* fades out exactly as the .is-stuck shadow (see ::after below) fades in
+     — the hairline is what separates the bar from the page while it's
+     sitting in its normal, unstuck spot; once page content is scrolling in
+     behind it and the shadow is doing that same job, a flat gray line
+     right above a soft shadow read as two competing edges instead of one,
+     so the harder line hands off to the shadow rather than stacking with
+     it. Same 0.2s as the shadow's own transition so the handoff reads as
+     one motion. */
+  transition: border-color 0.2s ease;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -152,6 +161,10 @@ body {
 
 .modes.is-stuck::after {
   opacity: 1;
+}
+
+.modes.is-stuck {
+  border-bottom-color: transparent;
 }
 
 .modes__tab {
@@ -664,7 +677,13 @@ body {
 @media (hover: hover) and (pointer: fine) {
   .field input[type="range"]:hover::-webkit-slider-thumb {
     border-color: var(--accent-end);
-    background: var(--blush);
+    /* a solid, fully opaque gray — a translucent one (tried first, at the
+       same 6% alpha used for the inactive-switch/asset-card washes
+       elsewhere) let whatever the thumb happens to be sitting over show
+       through at nearly full strength (the accent-filled part of the
+       track, or the plain page background), reading as the thumb going
+       see-through on hover rather than turning a consistent gray. */
+    background: #dfe0e0;
   }
 }
 
@@ -701,7 +720,13 @@ body {
 @media (hover: hover) and (pointer: fine) {
   .field input[type="range"]:hover::-moz-range-thumb {
     border-color: var(--accent-end);
-    background: var(--blush);
+    /* a solid, fully opaque gray — a translucent one (tried first, at the
+       same 6% alpha used for the inactive-switch/asset-card washes
+       elsewhere) let whatever the thumb happens to be sitting over show
+       through at nearly full strength (the accent-filled part of the
+       track, or the plain page background), reading as the thumb going
+       see-through on hover rather than turning a consistent gray. */
+    background: #dfe0e0;
   }
 }
 
