@@ -462,12 +462,20 @@ function updateSliderThumbVisuals() {
 // A native range input jumps straight to wherever you press, then drags
 // from there — precise with a mouse, but a finger is wide enough that a
 // touch meant to grab-and-adjust from the current value often lands a
-// little off and yanks the value with it. This replaces that, touch only
-// (event.pointerType — a mouse or pen press is untouched, since a jump-to
-// click is exactly the precise, expected behavior there): press anywhere
-// on a slider and drag by feel from wherever the finger actually is,
-// moving the value by the same distance the finger moves, rather than
-// snapping it to the touch point first.
+// little off and yanks the value with it. Worse, that jump turned out to
+// still be reachable on touch even with a full relative-drag replacement
+// in place and reattached to window for reliability (reported back as
+// still happening occasionally) — some path back to the native
+// jump-then-drag was evidently still open on a real device this tool
+// can't fully reproduce or rule out. Rather than keep chasing that,
+// touches (event.pointerType — a mouse or pen press is untouched, since a
+// jump-to-click is exactly the precise, expected behavior there) now
+// split into two kinds that are each individually incapable of ever
+// producing a jump, instead of one kind that's supposed to avoid it:
+// starting the touch ON the handle itself drags it, by feel, exactly as
+// before; starting anywhere else on the track nudges the value by exactly
+// one step toward that side and does nothing else — never an absolute
+// position, so there's no jump left to happen either way.
 function snapToStep(value, min, max, step) {
   const stepped = min + Math.round((value - min) / step) * step;
   // step is sometimes fractional (0.1, 0.25) — round off the float noise
@@ -494,6 +502,32 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
     // handler) still works normally, and still gets a real indicator, on
     // the visible dot itself (see :focus-visible + .slider-thumb-visual in
     // style.css).
+
+    const min = +input.min || 0, max = +input.max || 100, step = +input.step || 1;
+    const inputRect = input.getBoundingClientRect();
+    const val = +input.value;
+    const pct = max > min ? (val - min) / (max - min) : 0;
+    // the handle's own current center, recomputed fresh (not read from the
+    // visual overlay's last-drawn position) using the exact same inset
+    // formula updateSliderThumbVisuals() draws it with, so this always
+    // agrees with wherever the handle is actually shown.
+    const radius = getThumbRadius(input);
+    const handleCenterX = inputRect.left + radius + pct * (inputRect.width - 2 * radius);
+    // a bit more generous than the handle's own visible radius — a
+    // fingertip is wider than it looks, and touch targets should be too.
+    const grabRadius = radius + 10;
+
+    if (Math.abs(e.clientX - handleCenterX) > grabRadius) {
+      // tapped elsewhere on the track — one step toward that side, full
+      // stop. No drag tracking starts from a tap like this at all.
+      const next = snapToStep(val + (e.clientX > handleCenterX ? step : -step), min, max, step);
+      if (next !== val) {
+        input.value = next;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return;
+    }
+
     // best-effort — wrapped defensively since a pointerId the browser
     // doesn't recognize as an active pointer throws here (confirmed
     // directly: an uncaught NotFoundError from this exact call silently
@@ -503,9 +537,8 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
     // into.
     try { input.setPointerCapture(e.pointerId); } catch {}
 
-    const min = +input.min || 0, max = +input.max || 100, step = +input.step || 1;
-    const trackWidth = input.getBoundingClientRect().width;
-    const startValue = +input.value;
+    const trackWidth = inputRect.width;
+    const startValue = val;
     const startX = e.clientX;
     const pointerId = e.pointerId;
 
