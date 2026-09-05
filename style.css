@@ -643,6 +643,17 @@ body {
 }
 
 @media (pointer: coarse) {
+  /* the bigger touch thumb (--thumb-size: 26px vs 20px) bleeds further
+     above the track, landing closer to the label/value row above it than
+     the same margin leaves room for on a fine pointer — a bit of extra
+     top margin here restores that breathing room specifically where the
+     thumb is actually bigger. */
+  .field input[type="range"] {
+    margin-top: 14px;
+  }
+}
+
+@media (pointer: coarse) {
   /* the browser's own touch-to-scroll/zoom gesture recognition otherwise
      competes with the custom touch-drag handling in script.js (a
      pointerdown there calls preventDefault(), replacing the native
@@ -654,6 +665,29 @@ body {
   .field input[type="range"] {
     touch-action: none;
   }
+}
+
+/* unconditional, not just for keyboard-vs-not: this outline was never a
+   useful focus indicator on this control anyway, drawn around the
+   invisible native track's own (small, easy to miss) box rather than the
+   visible dot users actually see — the rule below gives keyboard focus a
+   real indicator on the dot itself instead, which is both genuinely
+   visible and drawn where the thing being focused actually appears. (This
+   used to also matter for touch: the drag handler in script.js briefly
+   called input.focus() itself, since its own preventDefault() on
+   pointerdown suppresses the focus a touch would otherwise cause, and
+   that showed the same outline on every touch-drag. That .focus() call
+   was removed instead of trying to hide just its own ring — checked
+   directly that :focus-visible matches a script-called .focus() from a
+   touch handler just as much as real keyboard focus, so there was no
+   reliable way to target one and not the other.) */
+.field input[type="range"]:focus {
+  outline: none;
+}
+
+.field input[type="range"]:focus-visible + .slider-thumb-visual .slider-thumb-visual__dot {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* The real native thumb is fully invisible now — see the long comment on

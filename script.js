@@ -408,11 +408,26 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
   input.insertAdjacentElement('afterend', visual);
 });
 
+// A native thumb's CENTER travels the track's full width — at min, the
+// center sits at the track's own left edge, so the thumb's left HALF
+// overflows past it (and the mirror image at max) — which is exactly what
+// the real, invisible thumb this visual sits on top of still does. Drawn
+// as-is, the visible dot would bleed into the card's side padding at
+// either end the same way (reported back as looking wrong: "the handle
+// sticks outside of the slider area"). Since this dot is a plain span,
+// not bound to that native behavior at all, it's free to use an INSET
+// model instead — its own center travels only the track width minus one
+// full thumb diameter, so its edges land exactly on the track's own ends
+// at min/max instead of past them. updateSliderFills() below insets its
+// fill percentage to match, so the color boundary still meets the dot
+// exactly rather than running past it.
+function getThumbRadius(input) {
+  const field = input.closest('.field');
+  return parseFloat(getComputedStyle(field).getPropertyValue('--thumb-size')) / 2;
+}
+
 // Positioned in the same coordinate space .field itself establishes (see
-// its position:relative in style.css) using the exact center-of-value
-// formula already verified (via a reference line, at both track ends) to
-// match how the browser itself places the real, now-invisible thumb — so
-// the fake one lands exactly on top of it. No transition on left/top: a
+// its position:relative in style.css). No transition on left/top: a
 // dragged thumb has to track the finger 1:1, not ease toward it.
 function updateSliderThumbVisuals() {
   document.querySelectorAll('.field input[type="range"]').forEach(input => {
@@ -428,7 +443,9 @@ function updateSliderThumbVisuals() {
     const inputRect = input.getBoundingClientRect();
     const min = +input.min || 0, max = +input.max || 100, val = +input.value;
     const pct = max > min ? (val - min) / (max - min) : 0;
-    visual.style.left = `${inputRect.left - fieldRect.left + pct * inputRect.width}px`;
+    const radius = getThumbRadius(input);
+    const x = inputRect.left - fieldRect.left + radius + pct * (inputRect.width - 2 * radius);
+    visual.style.left = `${x}px`;
     visual.style.top = `${inputRect.top - fieldRect.top + inputRect.height / 2}px`;
   });
 }
@@ -455,7 +472,19 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
   input.addEventListener('pointerdown', e => {
     if (e.pointerType !== 'touch') return;
     e.preventDefault(); // stop the native jump-to-touch-point
-    input.focus(); // preventDefault also suppresses the native focus that would otherwise follow
+    // deliberately not calling input.focus() here (preventDefault also
+    // suppresses the native focus a touch would otherwise cause) — tried
+    // that, and a light blue focus ring started showing on every
+    // touch-drag as a result. It's not just a matter of hiding that ring
+    // conditionally either: it comes from :focus-visible matching a
+    // script-called .focus() here just as much as it matches real
+    // keyboard focus (checked directly), so there's no reliable way to
+    // target "the ring from this specific call" and leave real keyboard
+    // focus styling intact. Simplest fix is to just not focus the control
+    // from a touch at all — genuine Tab-key focus (unrelated to this
+    // handler) still works normally, and still gets a real indicator, on
+    // the visible dot itself (see :focus-visible + .slider-thumb-visual in
+    // style.css).
     // keeps tracking even if the finger slides outside the track — wrapped
     // defensively since a pointerId the browser doesn't recognize as an
     // active pointer throws here (confirmed directly: an uncaught
@@ -498,10 +527,17 @@ document.querySelectorAll('.field input[type="range"]').forEach(input => {
 // recalculate() (via syncDisplays() below) so it stays in sync with every
 // slider, not just the one just dragged.
 function updateSliderFills() {
-  document.querySelectorAll('input[type="range"]').forEach(el => {
+  document.querySelectorAll('.field input[type="range"]').forEach(el => {
     const min = +el.min || 0, max = +el.max || 100, val = +el.value;
-    const pct = max > min ? ((val - min) / (max - min)) * 100 : 0;
-    el.style.background = `linear-gradient(to right, var(--accent), var(--accent-end) ${pct}%, var(--rule) ${pct}%)`;
+    const pct = max > min ? (val - min) / (max - min) : 0;
+    // matches the visual thumb's own inset position (see
+    // updateSliderThumbVisuals()) rather than the raw value percentage, so
+    // the fill's color boundary meets the dot exactly instead of running
+    // past it toward the track's true (un-inset) end.
+    const radius = getThumbRadius(el);
+    const trackWidth = el.getBoundingClientRect().width;
+    const fillPct = trackWidth > 0 ? ((radius + pct * (trackWidth - 2 * radius)) / trackWidth) * 100 : 0;
+    el.style.background = `linear-gradient(to right, var(--accent), var(--accent-end) ${fillPct}%, var(--rule) ${fillPct}%)`;
   });
 }
 
