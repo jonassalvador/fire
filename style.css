@@ -110,12 +110,6 @@ body {
   /* keeps iOS Safari from occasionally lagging a frame behind on scroll,
      which briefly shows the same gap even with the safe-area fix above. */
   transform: translateZ(0);
-  /* fades in only once actually pinned to the top with page content
-     scrolling in behind it (see .is-stuck below) — a permanent shadow would
-     look wrong while the bar still sits in its normal spot under the
-     masthead, with nothing behind it to separate from yet. */
-  box-shadow: 0 12px 24px -8px rgba(22, 23, 24, 0);
-  transition: box-shadow 0.2s ease;
 }
 
 /* a zero-height marker in normal document flow immediately above .modes, at
@@ -130,15 +124,40 @@ body {
   height: 0;
 }
 
-.modes.is-stuck {
-  box-shadow: 0 12px 24px -8px rgba(22, 23, 24, 0.18);
+/* fades in only once actually pinned to the top with page content scrolling
+   in behind it (see .is-stuck, toggled in script.js) — a permanent shadow
+   would look wrong while the bar still sits in its normal spot under the
+   masthead, with nothing behind it to separate from yet. A plain box-shadow
+   on .modes itself was tried first, but .modes is inset by the page's own
+   side padding/max-width, so the shadow's horizontal blur only ever reached
+   as far as that inset edge — leaving bare page background visible in the
+   margins on either side instead of shadow. This pseudo-element breaks out
+   of that with the standard "full-bleed from inside a centered container"
+   trick: left:50% + a -50vw margin lands its left edge at the true viewport
+   edge regardless of .modes' own (inset, centered) width, and width:100vw
+   then stretches it the rest of the way across. */
+.modes::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 100vw;
+  margin-left: -50vw;
+  height: 16px;
+  background: linear-gradient(to bottom, rgba(22, 23, 24, 0.18), transparent);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.modes.is-stuck::after {
+  opacity: 1;
 }
 
 .modes__tab {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
   padding: 22px 16px;
   background: none;
   border: none;
@@ -173,17 +192,6 @@ body {
    land feels dead the instant a tap has any latency. */
 .modes__tab:active { transform: scale(0.97); }
 
-/* while every label fits on one line, centering the badge against it reads
-   best — but the moment ANY tab wraps to two lines, centering leaves the
-   single-line tabs' badges floating oddly against the multi-line ones, so
-   every tab switches to top alignment together (JS toggles this class by
-   actually measuring rendered label heights — a pure breakpoint can't know
-   this, since it depends on which label text is longest, not just viewport
-   width). */
-.modes.is-wrapped .modes__tab {
-  align-items: flex-start;
-}
-
 /* scoped to devices that can actually hover with a precise pointer — a
    touchscreen has no real "hover", but without this guard mobile browsers
    still apply :hover on tap and then hold it until a different element is
@@ -195,11 +203,9 @@ body {
 
 /* Tabs still span the full width edge-to-edge on phone (flex: 1 from the
    base rule keeps them evenly splitting it, same as desktop) — labels just
-   wrap to more lines as needed, which .modes.is-wrapped above already
-   handles gracefully (top-aligning the badge instead of centering it
-   against a taller multi-line label). A horizontal-scrolling strip was
-   tried here instead but left tabs 2/3 mostly off-screen with no visual
-   hint there was more to scroll to. */
+   wrap to more lines as needed, centered like any other button text. A
+   horizontal-scrolling strip was tried here instead but left tabs 2/3
+   mostly off-screen with no visual hint there was more to scroll to. */
 @media (max-width: 640px) {
   .modes__tab {
     padding: 18px 14px;
@@ -208,20 +214,6 @@ body {
 
 .modes__tab.is-active {
   color: var(--ink);
-}
-
-.modes__num {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--accent-gradient);
-  color: #fff;
-  font-family: var(--mono);
-  font-size: 12px;
 }
 
 .modes__label {
@@ -388,21 +380,21 @@ body {
   opacity: 0;
   transition: opacity 0.3s ease;
   /* a slider thumb sitting at its min/max value extends past the track's
-     own end by half its own width — up to 12px at the 24px size it grows to
-     while being dragged (see the :active thumb rule below), plus a couple
-     more px for its box-shadow's blur — and this overflow:hidden was
-     clipping that legitimate bleed at both ends (confirmed directly:
-     measuring every range input's right edge against its nearest
-     overflow:hidden ancestor showed the two landing within 2px of each
-     other for every slider inside one of these wrappers, and only these —
-     the handful of sliders that sit directly in a plain, non-collapsible
-     .field-group were never clipped at all). Extending the box outward by
-     20px via margin, then padding the same 20px back on the inside, keeps
-     every child's rendered position identical to before (the two exactly
-     cancel out) while giving the clipping boundary itself 20px of slack on
-     each side to clip into instead of clipping the thumb. */
-  margin: 0 -20px;
-  padding: 0 20px;
+     own end by half its own width — up to 15px at the 30px size it grows to
+     while being dragged on a touch pointer (see the :active thumb rule
+     below), plus a couple more px for its box-shadow's blur — and this
+     overflow:hidden was clipping that legitimate bleed at both ends
+     (confirmed directly: measuring every range input's right edge against
+     its nearest overflow:hidden ancestor showed the two landing within 2px
+     of each other for every slider inside one of these wrappers, and only
+     these — the handful of sliders that sit directly in a plain,
+     non-collapsible .field-group were never clipped at all). Extending the
+     box outward by 24px via margin, then padding the same 24px back on the
+     inside, keeps every child's rendered position identical to before (the
+     two exactly cancel out) while giving the clipping boundary itself 24px
+     of slack on each side to clip into instead of clipping the thumb. */
+  margin: 0 -24px;
+  padding: 0 24px;
 }
 
 /* fades in/out over the same 0.3s as the outer grid-row slide above, so the
@@ -593,38 +585,74 @@ body {
   margin-top: 6px;
 }
 
-/* active (pressed/dragging) resizes the real width/height, so the 3px
-   border never scales with it — an earlier transform: scale() attempt kept
-   the border a constant WIDTH but scaling and border-width interpolate
-   independently during the transition, so the two only truly cancel out at
-   the exact rest/active endpoints, not the frames in between, which read as
-   the ring's thickness wavering. A plain size change has no such
-   trade-off. No margin-top is needed to center it on the track either —
-   verified directly (a reference line drawn at the track's exact
-   mathematical center, at both 20px and 24px thumb sizes): Chrome/WebKit
-   already vertically centers a custom-sized thumb on the track by
-   default. An earlier attempt added a margin-top compensation on the
-   theory that it doesn't — that theory was simply wrong, and the "fix"
-   was the thing throwing the centering off in the first place.
+/* active (pressed/dragging) grows the thumb via transform: scale() rather
+   than changing width/height directly. That width/height approach was
+   tried first and looked fine at a glance, but broke under closer,
+   position-specific testing: with the thumb positioned near the LEFT end
+   of the track (not the middle, which is where it was originally checked),
+   growing width/height visibly shifted the whole box to the right instead
+   of growing evenly from its own center — and the mirror image happens
+   near the right end (confirmed directly, in this same tool, with a
+   reference line at the track's exact mathematical value-position: the
+   line stayed centered on the thumb at rest, then landed off to one side
+   the instant the width/height grew). transform: scale() doesn't have this
+   problem, because it's a pure paint-time effect applied after layout —
+   the browser positions the (always-static-sized) box first, using
+   whatever its own internal slider math is, and the scale just stretches
+   that already-correctly-placed box around its own center afterward,
+   wherever on the track that happens to be. The trade-off is the 3px
+   border scales up with it too (~20% thicker at the 1.2x used here)
+   instead of staying pixel-constant — accepted deliberately, since a
+   slightly thicker ring while pressed reads far better than the thumb
+   visibly drifting toward one edge of the track.
+   No margin-top is needed to vertically center the (static, unscaled) box
+   on the track either — verified directly (a reference line at the
+   track's exact mathematical center, at the 20/26px static sizes actually
+   used): Chrome/Blink already vertically centers a custom-sized thumb by
+   default, and an earlier attempt at a margin-top compensation was
+   throwing that off, not fixing it — confirmed there, in this same tool,
+   and left alone here. Safari/WebKit is a separate case: it's a
+   well-documented, long-standing engine difference that Safari does NOT
+   auto-center a custom-sized ::-webkit-slider-thumb the way Blink does, so
+   it needs that margin-top compensation Blink doesn't — but this tool has
+   no way to load real Safari to confirm that directly, so the fix below is
+   gated to Safari/WebKit specifically (see the @supports block) precisely
+   so it can't touch the behavior already verified correct here if that
+   documented difference turns out not to apply. --thumb-size is a custom
+   property (rather than repeating the number across width/height/
+   margin-top) so the Safari-only compensation's math can reference the
+   exact same number the visible size uses, in one place.
    Hover no longer resizes the thumb (a resize-on-hover is indistinguishable
    from resize-on-press on a touchscreen, since touch fires both at once) —
    it shifts to a color-only change instead, matching the hover treatment
-   used everywhere else (tabs, switches). Active now grows the thumb LARGER
-   than rest, the reverse of an earlier version that shrank it while
-   dragging. The rest-state shadow is a real, intentional box-shadow rather
-   than relying on any browser's own default touch-highlight rendering (that
-   default does show something shadow-like on some mobile browsers, but it's
-   not present on desktop and isn't reliable enough to depend on). */
+   used everywhere else (tabs, switches). The rest-state shadow is a real,
+   intentional box-shadow rather than relying on any browser's own default
+   touch-highlight rendering (that default does show something shadow-like
+   on some mobile browsers, but it's not present on desktop and isn't
+   reliable enough to depend on) — transform: scale() carries the shadow
+   along proportionally too, which just reads as it deepening slightly
+   under press, not a bug. A touch pointer also gets a bigger static thumb
+   across the board — the thumb's rendered size is its entire hit area on a
+   native range input, and 20px was proving hard to reliably grab with a
+   fingertip. */
 .field input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
+  --thumb-size: 20px;
+  width: var(--thumb-size);
+  height: var(--thumb-size);
   border-radius: 50%;
   background: var(--paper-raised);
   border: 3px solid var(--accent);
   box-shadow: 0 1px 3px rgba(22, 23, 24, 0.15), 0 1px 2px rgba(22, 23, 24, 0.1);
   cursor: pointer;
-  transition: width 0.15s ease, height 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  transform: scale(1);
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+@media (pointer: coarse) {
+  .field input[type="range"]::-webkit-slider-thumb {
+    --thumb-size: 26px;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -635,21 +663,47 @@ body {
 }
 
 .field input[type="range"]:active::-webkit-slider-thumb {
-  width: 24px;
-  height: 24px;
+  transform: scale(1.2);
+}
+
+/* see the long comment above the rest-state rule for why this is scoped to
+   Safari/WebKit only — -webkit-touch-callout is a real, load-bearing
+   feature check here (not just a comment): every iOS browser is WebKit
+   under the hood regardless of app (Safari, Chrome-iOS, Firefox-iOS all
+   alike), and none of them support setting it off, so this reaches all of
+   them, while Chrome/Blink (this tool included) doesn't support the
+   property at all and never matches. */
+@supports (-webkit-touch-callout: none) {
+  .field input[type="range"]::-webkit-slider-thumb {
+    margin-top: calc((6px - var(--thumb-size)) / 2);
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, margin-top 0.15s ease;
+  }
 }
 
 /* Firefox centers a custom -moz-range-thumb on the track automatically, so
-   this doesn't need (and shouldn't get) the margin-top hack above. */
+   this doesn't need (and shouldn't get) the margin-top hack above. Same
+   transform: scale() reasoning as the -webkit- block above applies here
+   too — not separately verified in Firefox (this tool can't load it), but
+   there's no reason to assume Firefox's internal slider-position math is
+   any less indifferent to a paint-time transform than Blink's, and
+   width/height was the one already confirmed to break in Blink. */
 .field input[type="range"]::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
+  --thumb-size: 20px;
+  width: var(--thumb-size);
+  height: var(--thumb-size);
   border-radius: 50%;
   background: var(--paper-raised);
   border: 3px solid var(--accent);
   box-shadow: 0 1px 3px rgba(22, 23, 24, 0.15), 0 1px 2px rgba(22, 23, 24, 0.1);
   cursor: pointer;
-  transition: width 0.15s ease, height 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  transform: scale(1);
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+@media (pointer: coarse) {
+  .field input[type="range"]::-moz-range-thumb {
+    --thumb-size: 26px;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -660,8 +714,7 @@ body {
 }
 
 .field input[type="range"]:active::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
+  transform: scale(1.2);
 }
 
 /* ---------- Strategy toggle ---------- */

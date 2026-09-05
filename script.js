@@ -50,28 +50,6 @@ const modesIndicator = document.querySelector('.modes__indicator');
 const modeTabs = document.querySelectorAll('.modes__tab');
 const modeFields = document.querySelectorAll('[data-modes]');
 
-// Whether the badge+label pair reads best centered (every label fits on one
-// line) or top-aligned (at least one has wrapped to two+ lines) depends on
-// the actual rendered text, not just the viewport width — a label can wrap
-// at all sorts of in-between widths depending on which word breaks where, so
-// this measures real label heights instead of guessing from a breakpoint.
-function updateModesAlignment() {
-  let wrapped = false;
-  document.querySelectorAll('.modes__label').forEach(label => {
-    // counting actual line boxes (via a Range over the text) rather than
-    // comparing scrollHeight to line-height — line-height often computes to
-    // the unresolved keyword "normal" rather than a pixel value, which broke
-    // that comparison silently instead of just being less precise.
-    const range = document.createRange();
-    range.selectNodeContents(label);
-    if (range.getClientRects().length > 1) wrapped = true;
-  });
-  modesNav.classList.toggle('is-wrapped', wrapped);
-  // wrapping can change every tab's width, so the indicator needs
-  // repositioning whenever this does.
-  updateTabIndicator();
-}
-
 // Sized/positioned from the currently active tab's own layout box —
 // offsetLeft/offsetWidth are relative to .modes (the nearest positioned
 // ancestor), and stay correct regardless of .modes' own horizontal scroll
@@ -100,11 +78,11 @@ if (modesSentinel && 'IntersectionObserver' in window) {
   ).observe(modesSentinel);
 }
 
-window.addEventListener('resize', updateModesAlignment);
+// tab widths can change (viewport resize, or the label font swapping in),
+// so the indicator needs repositioning whenever they do.
+window.addEventListener('resize', updateTabIndicator);
 if (document.fonts && document.fonts.ready) {
-  // the label font (Inter) loads asynchronously — re-check once it's actually
-  // in, since the fallback font's line-wrapping can differ from the real one.
-  document.fonts.ready.then(updateModesAlignment);
+  document.fonts.ready.then(updateTabIndicator);
 }
 
 modeTabs.forEach(tab => {
@@ -191,7 +169,7 @@ document.querySelectorAll('input[name="withdrawTiming"]').forEach(radio => {
     withdrawWaitFields.classList.toggle('is-open', wait);
     withdrawTimingHint.textContent = wait
       ? 'Kapitalet får växa och du fortsätter spara i ytterligare några år innan uttaget beräknas.'
-      : 'Uttaget beräknas utifrån ditt kapital redan idag, som om du gick i FIRE direkt utan att vänta eller spara mer.';
+      : 'Uttaget beräknas utifrån ditt kapital redan idag, utan att vänta eller spara mer.';
     recalculate();
   });
 });
@@ -1290,4 +1268,4 @@ document.querySelectorAll('input[type="range"], select, input[type="checkbox"]')
 
 updateVisibility();
 recalculate();
-updateModesAlignment();
+updateTabIndicator();

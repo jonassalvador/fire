@@ -2,7 +2,7 @@
 <html lang="sv">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>FIRE — Frihetskalkylatorn</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,15 +19,12 @@
 <div class="modes__sentinel" aria-hidden="true"></div>
 <nav class="modes" role="tablist" aria-label="Välj beräkning">
   <button class="modes__tab is-active" data-mode="need" role="tab" aria-selected="true">
-    <span class="modes__num">01</span>
     <span class="modes__label">Hur mycket behöver jag?</span>
   </button>
   <button class="modes__tab" data-mode="ready" role="tab" aria-selected="false">
-    <span class="modes__num">02</span>
     <span class="modes__label">När är jag redo?</span>
   </button>
   <button class="modes__tab" data-mode="withdraw" role="tab" aria-selected="false">
-    <span class="modes__num">03</span>
     <span class="modes__label">Hur mycket kan jag ta ut?</span>
   </button>
   <div class="modes__indicator" aria-hidden="true"></div>
@@ -64,7 +61,7 @@
             <span>Vänta lite till</span>
           </label>
         </div>
-        <p class="field-hint" id="withdraw-timing-hint">Uttaget beräknas utifrån ditt kapital redan idag, som om du gick i FIRE direkt utan att vänta eller spara mer.</p>
+        <p class="field-hint" id="withdraw-timing-hint">Uttaget beräknas utifrån ditt kapital redan idag, utan att vänta eller spara mer.</p>
 
         <div class="expand-collapse" id="withdraw-wait-fields">
           <div class="expand-collapse-inner">
